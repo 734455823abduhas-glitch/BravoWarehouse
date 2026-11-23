@@ -26,9 +26,12 @@ import com.bravo.warehouse.data.AppDatabase
 import com.bravo.warehouse.data.repository.ItemRepository
 import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.data.repository.StockMovementRepository
+import com.bravo.warehouse.data.repository.TransferRepository
 import com.bravo.warehouse.ui.screens.ItemsScreen
 import com.bravo.warehouse.ui.screens.WarehouseScreen
 import com.bravo.warehouse.ui.screens.StockMovementsScreen
+import com.bravo.warehouse.ui.screens.TransferScreen
+import androidx.compose.runtime.collectAsState
 
 class MainActivity : ComponentActivity() {
 
@@ -63,6 +66,16 @@ fun BravoWarehouseApp(database: AppDatabase) {
     val movementRepository = remember {
         StockMovementRepository(database.stockMovementDao())
     }
+
+    val transferRepository = remember {
+        TransferRepository(database)
+    }
+
+    val items by itemRepository.getAllItems()
+        .collectAsState(initial = emptyList())
+
+    val warehouses by warehouseRepository.getAllWarehouses()
+        .collectAsState(initial = emptyList())
 
     var currentScreen by remember {
         mutableStateOf("dashboard")
@@ -103,6 +116,12 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     }
                 )
 
+                "transfers" -> TransferScreen(
+                    items = items,
+                    warehouses = warehouses,
+                    transferRepository = transferRepository
+                )
+
                 else -> DashboardScreen(
                     onMenuClick = { title ->
                         when (title) {
@@ -110,6 +129,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                             "المخازن" -> currentScreen = "warehouses"
                             "الوارد" -> currentScreen = "movements"
                             "المنصرف" -> currentScreen = "movements"
+                            "التحويلات" -> currentScreen = "transfers"
                         }
                     }
                 )
@@ -185,7 +205,6 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-
                         DashboardStat("عدد الأصناف", "0")
                         DashboardStat("عدد المخازن", "0")
                         DashboardStat("تنبيهات الطلب", "0")
@@ -212,7 +231,6 @@ fun DashboardScreen(
             ) {
 
                 items(menuItems) { item ->
-
                     MenuCard(
                         title = item.first,
                         icon = item.second,
