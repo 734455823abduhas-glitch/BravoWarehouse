@@ -22,11 +22,27 @@ class StockMovementRepository(
     suspend fun insertMovement(
         movement: StockMovementEntity
     ): Long {
+        require(movement.quantity > 0) {
+            "Quantity must be greater than zero"
+        }
+
+        require(
+            movement.movementType in listOf(
+                "IN",
+                "OUT",
+                "TRANSFER",
+                "RETURN",
+                "ADJUSTMENT"
+            )
+        ) {
+            "Invalid movement type"
+        }
+
         return stockMovementDao.insertMovement(movement)
     }
 
-    suspend fun approveMovement(id: Long): Int {
-        return stockMovementDao.approveMovement(id)
+    suspend fun approveMovement(id: Long): Boolean {
+        return stockMovementDao.approveMovementSafely(id)
     }
 
     suspend fun getCurrentBalance(
