@@ -14,8 +14,10 @@ android {
         applicationId = "com.bravo.warehouse"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+
+        // Application Version
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     buildFeatures {
@@ -48,20 +50,23 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 
+    // Room Database
     implementation("androidx.room:room-runtime:2.8.2")
     implementation("androidx.room:room-ktx:2.8.2")
-
     ksp("androidx.room:room-compiler:2.8.2")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
+    // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.7")
 
+    // Hilt
     implementation("com.google.dagger:hilt-android:2.57.2")
     ksp("com.google.dagger:hilt-compiler:2.57.2")
 
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.10.5")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
