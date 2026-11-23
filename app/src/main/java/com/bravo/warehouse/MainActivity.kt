@@ -3,7 +3,6 @@ package com.bravo.warehouse
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -11,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,7 +42,6 @@ fun BravoWarehouseApp() {
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl
     ) {
-
         MaterialTheme(
             colorScheme = lightColorScheme(
                 primary = Navy,
@@ -50,7 +49,6 @@ fun BravoWarehouseApp() {
                 background = Background
             )
         ) {
-
             DashboardScreen()
         }
     }
@@ -122,20 +120,9 @@ fun DashboardScreen() {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
 
-                        DashboardStat(
-                            title = "عدد الأصناف",
-                            value = "0"
-                        )
-
-                        DashboardStat(
-                            title = "عدد المخازن",
-                            value = "0"
-                        )
-
-                        DashboardStat(
-                            title = "تنبيهات الطلب",
-                            value = "0"
-                        )
+                        DashboardStat("عدد الأصناف", "0")
+                        DashboardStat("عدد المخازن", "0")
+                        DashboardStat("تنبيهات الطلب", "0")
                     }
                 }
             }
