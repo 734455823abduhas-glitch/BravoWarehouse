@@ -2,6 +2,7 @@ package com.bravo.warehouse
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -81,6 +82,11 @@ fun BravoWarehouseApp(database: AppDatabase) {
         mutableStateOf("dashboard")
     }
 
+    // زر الرجوع في الهاتف يعيد المستخدم إلى لوحة التحكم
+    BackHandler(enabled = currentScreen != "dashboard") {
+        currentScreen = "dashboard"
+    }
+
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl
     ) {
@@ -116,11 +122,52 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     }
                 )
 
-                "transfers" -> TransferScreen(
-                    items = items,
-                    warehouses = warehouses,
-                    transferRepository = transferRepository
-                )
+                "transfers" -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                    ) {
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    currentScreen = "dashboard"
+                                }
+                            ) {
+                                Text(
+                                    text = "رجوع ←",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Text(
+                                text = "التحويلات بين المخازن",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Navy
+                            )
+                        }
+
+                        HorizontalDivider()
+
+                        Box(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TransferScreen(
+                                items = items,
+                                warehouses = warehouses,
+                                transferRepository = transferRepository
+                            )
+                        }
+                    }
+                }
 
                 else -> DashboardScreen(
                     onMenuClick = { title ->
@@ -229,7 +276,6 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-
                 items(menuItems) { item ->
                     MenuCard(
                         title = item.first,
