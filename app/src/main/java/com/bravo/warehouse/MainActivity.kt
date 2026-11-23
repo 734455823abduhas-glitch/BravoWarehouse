@@ -25,8 +25,10 @@ import com.bravo.warehouse.data.DatabaseProvider
 import com.bravo.warehouse.data.AppDatabase
 import com.bravo.warehouse.data.repository.ItemRepository
 import com.bravo.warehouse.data.repository.WarehouseRepository
+import com.bravo.warehouse.data.repository.StockMovementRepository
 import com.bravo.warehouse.ui.screens.ItemsScreen
 import com.bravo.warehouse.ui.screens.WarehouseScreen
+import com.bravo.warehouse.ui.screens.StockMovementsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -56,6 +58,10 @@ fun BravoWarehouseApp(database: AppDatabase) {
 
     val warehouseRepository = remember {
         WarehouseRepository(database.warehouseDao())
+    }
+
+    val movementRepository = remember {
+        StockMovementRepository(database.stockMovementDao())
     }
 
     var currentScreen by remember {
@@ -88,11 +94,22 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     }
                 )
 
+                "movements" -> StockMovementsScreen(
+                    itemRepository = itemRepository,
+                    warehouseRepository = warehouseRepository,
+                    movementRepository = movementRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
+
                 else -> DashboardScreen(
                     onMenuClick = { title ->
                         when (title) {
                             "الأصناف" -> currentScreen = "items"
                             "المخازن" -> currentScreen = "warehouses"
+                            "الوارد" -> currentScreen = "movements"
+                            "المنصرف" -> currentScreen = "movements"
                         }
                     }
                 )
