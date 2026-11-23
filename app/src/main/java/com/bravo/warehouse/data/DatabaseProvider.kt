@@ -35,6 +35,45 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS stock_movements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    documentNumber TEXT NOT NULL,
+                    movementType TEXT NOT NULL,
+                    itemId INTEGER NOT NULL,
+                    warehouseId INTEGER NOT NULL,
+                    quantity REAL NOT NULL,
+                    notes TEXT NOT NULL,
+                    movementDate INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    createdBy TEXT NOT NULL,
+                    isApproved INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_movements_itemId ON stock_movements(itemId)"
+            )
+
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_movements_warehouseId ON stock_movements(warehouseId)"
+            )
+
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_movements_movementType ON stock_movements(movementType)"
+            )
+
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_movements_documentNumber ON stock_movements(documentNumber)"
+            )
+        }
+    }
+
     @Volatile
     private var INSTANCE: AppDatabase? = null
 
@@ -45,7 +84,10 @@ object DatabaseProvider {
                 AppDatabase::class.java,
                 AppDatabase.DATABASE_NAME
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3
+                )
                 .build()
 
             INSTANCE = instance
