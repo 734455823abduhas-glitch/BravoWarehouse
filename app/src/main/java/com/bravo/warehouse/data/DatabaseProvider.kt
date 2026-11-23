@@ -9,7 +9,6 @@ object DatabaseProvider {
 
     private val MIGRATION_1_2 = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
-
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS warehouses (
@@ -24,11 +23,9 @@ object DatabaseProvider {
                 )
                 """.trimIndent()
             )
-
             db.execSQL(
                 "CREATE UNIQUE INDEX IF NOT EXISTS index_warehouses_warehouseCode ON warehouses(warehouseCode)"
             )
-
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_warehouses_warehouseName ON warehouses(warehouseName)"
             )
@@ -37,7 +34,6 @@ object DatabaseProvider {
 
     private val MIGRATION_2_3 = object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
-
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS stock_movements (
@@ -55,21 +51,51 @@ object DatabaseProvider {
                 )
                 """.trimIndent()
             )
-
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_stock_movements_itemId ON stock_movements(itemId)"
             )
-
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_stock_movements_warehouseId ON stock_movements(warehouseId)"
             )
-
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_stock_movements_movementType ON stock_movements(movementType)"
             )
-
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_stock_movements_documentNumber ON stock_movements(documentNumber)"
+            )
+        }
+    }
+
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS stock_transfers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    transferNumber TEXT NOT NULL,
+                    itemId INTEGER NOT NULL,
+                    sourceWarehouseId INTEGER NOT NULL,
+                    destinationWarehouseId INTEGER NOT NULL,
+                    quantity REAL NOT NULL,
+                    notes TEXT NOT NULL,
+                    transferDate INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    isApproved INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_stock_transfers_transferNumber ON stock_transfers(transferNumber)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_transfers_itemId ON stock_transfers(itemId)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_transfers_sourceWarehouseId ON stock_transfers(sourceWarehouseId)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_stock_transfers_destinationWarehouseId ON stock_transfers(destinationWarehouseId)"
             )
         }
     }
@@ -86,7 +112,8 @@ object DatabaseProvider {
             )
                 .addMigrations(
                     MIGRATION_1_2,
-                    MIGRATION_2_3
+                    MIGRATION_2_3,
+                    MIGRATION_3_4
                 )
                 .build()
 
