@@ -20,11 +20,18 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
+import com.bravo.warehouse.data.DatabaseProvider
+import com.bravo.warehouse.data.AppDatabase
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var database: AppDatabase
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // تهيئة قاعدة البيانات المحلية
+        database = DatabaseProvider.getDatabase(applicationContext)
 
         setContent {
             BravoWarehouseApp()
