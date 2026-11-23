@@ -3,13 +3,14 @@ package com.bravo.warehouse
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.bravo.warehouse.data.DatabaseProvider
 import com.bravo.warehouse.data.AppDatabase
+import com.bravo.warehouse.data.repository.ItemRepository
+import com.bravo.warehouse.ui.screens.ItemsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -30,11 +33,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // تهيئة قاعدة البيانات المحلية
         database = DatabaseProvider.getDatabase(applicationContext)
 
         setContent {
-            BravoWarehouseApp()
+            BravoWarehouseApp(database)
         }
     }
 }
@@ -44,7 +46,15 @@ private val Background = Color(0xFFF4F6FA)
 private val Green = Color(0xFF238B65)
 
 @Composable
-fun BravoWarehouseApp() {
+fun BravoWarehouseApp(database: AppDatabase) {
+
+    val repository = remember {
+        ItemRepository(database.itemDao())
+    }
+
+    var showItems by remember {
+        mutableStateOf(false)
+    }
 
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl
@@ -56,13 +66,24 @@ fun BravoWarehouseApp() {
                 background = Background
             )
         ) {
-            DashboardScreen()
+            if (showItems) {
+                ItemsScreen(
+                    repository = repository,
+                    onBack = { showItems = false }
+                )
+            } else {
+                DashboardScreen(
+                    onItemsClick = { showItems = true }
+                )
+            }
         }
     }
 }
 
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(
+    onItemsClick: () -> Unit
+) {
 
     val menuItems = listOf(
         "الأصناف" to "📦",
@@ -156,7 +177,12 @@ fun DashboardScreen() {
 
                     MenuCard(
                         title = item.first,
-                        icon = item.second
+                        icon = item.second,
+                        onClick = {
+                            if (item.first == "الأصناف") {
+                                onItemsClick()
+                            }
+                        }
                     )
                 }
             }
@@ -183,53 +209,4 @@ fun DashboardStat(
 
         Text(
             text = title,
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-fun MenuCard(
-    title: String,
-    icon: String
-) {
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(115.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 3.dp
-        )
-    ) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                text = icon,
-                fontSize = 29.sp
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Navy
-            )
-        }
-    }
-}
+            color
