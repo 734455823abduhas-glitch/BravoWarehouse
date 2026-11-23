@@ -56,6 +56,12 @@ jobs:
       - name: Build APK
         run: gradle assembleDebug
 
+      - name: Verify APK Signature
+        run: |
+          APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --print-certs "$APK"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
