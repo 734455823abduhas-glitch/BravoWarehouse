@@ -209,4 +209,55 @@ fun DashboardStat(
 
         Text(
             text = title,
-            color
+            color = Color.White.copy(alpha = 0.85f),
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun MenuCard(
+    title: String,
+    icon: String,
+    onClick: () -> Unit
+) {
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(115.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 3.dp
+        )
+    ) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+            Text(
+                text = icon,
+                fontSize = 29.sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Navy
+            )
+        }
+    }
+}
