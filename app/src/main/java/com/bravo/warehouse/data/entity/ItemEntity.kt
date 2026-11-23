@@ -12,34 +12,18 @@ import androidx.room.PrimaryKey
     ]
 )
 data class ItemEntity(
-
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    // كود الصنف
     val itemCode: String,
-
-    // اسم الصنف
     val itemName: String,
-
-    // تصنيف الصنف
     val category: String,
-
-    // وحدة القياس
     val unit: String,
 
-    // الحد الأدنى للمخزون
     val minimumStock: Double = 0.0,
-
-    // وصف الصنف
     val description: String = "",
-
-    // حالة الصنف
     val isActive: Boolean = true,
 
-    // تاريخ الإضافة
     val createdAt: Long = System.currentTimeMillis(),
-
-    // تاريخ آخر تحديث
     val updatedAt: Long = System.currentTimeMillis()
 )
