@@ -24,7 +24,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import com.bravo.warehouse.data.DatabaseProvider
 import com.bravo.warehouse.data.AppDatabase
 import com.bravo.warehouse.data.repository.ItemRepository
+import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.ui.screens.ItemsScreen
+import com.bravo.warehouse.ui.screens.WarehouseScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -48,12 +50,16 @@ private val Green = Color(0xFF238B65)
 @Composable
 fun BravoWarehouseApp(database: AppDatabase) {
 
-    val repository = remember {
+    val itemRepository = remember {
         ItemRepository(database.itemDao())
     }
 
-    var showItems by remember {
-        mutableStateOf(false)
+    val warehouseRepository = remember {
+        WarehouseRepository(database.warehouseDao())
+    }
+
+    var currentScreen by remember {
+        mutableStateOf("dashboard")
     }
 
     CompositionLocalProvider(
@@ -66,14 +72,29 @@ fun BravoWarehouseApp(database: AppDatabase) {
                 background = Background
             )
         ) {
-            if (showItems) {
-                ItemsScreen(
-                    repository = repository,
-                    onBack = { showItems = false }
+            when (currentScreen) {
+
+                "items" -> ItemsScreen(
+                    repository = itemRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
                 )
-            } else {
-                DashboardScreen(
-                    onItemsClick = { showItems = true }
+
+                "warehouses" -> WarehouseScreen(
+                    repository = warehouseRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
+
+                else -> DashboardScreen(
+                    onMenuClick = { title ->
+                        when (title) {
+                            "الأصناف" -> currentScreen = "items"
+                            "المخازن" -> currentScreen = "warehouses"
+                        }
+                    }
                 )
             }
         }
@@ -82,7 +103,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
 
 @Composable
 fun DashboardScreen(
-    onItemsClick: () -> Unit
+    onMenuClick: (String) -> Unit
 ) {
 
     val menuItems = listOf(
@@ -179,9 +200,7 @@ fun DashboardScreen(
                         title = item.first,
                         icon = item.second,
                         onClick = {
-                            if (item.first == "الأصناف") {
-                                onItemsClick()
-                            }
+                            onMenuClick(item.first)
                         }
                     )
                 }
