@@ -1,0 +1,87 @@
+package com.bravo.warehouse.data.repository
+
+import com.bravo.warehouse.data.dao.ItemDao
+import com.bravo.warehouse.data.entity.ItemEntity
+
+class ItemRepository(
+    private val itemDao: ItemDao
+) {
+
+    // عرض جميع الأصناف
+    fun getAllItems() = itemDao.getAllItems()
+
+    // البحث عن الأصناف
+    fun searchItems(search: String) =
+        itemDao.searchItems(search)
+
+    // جلب صنف بواسطة رقمه
+    suspend fun getItemById(id: Long) =
+        itemDao.getItemById(id)
+
+    // إضافة صنف جديد
+    suspend fun insertItem(item: ItemEntity): Long {
+
+        require(item.itemCode.isNotBlank()) {
+            "كود الصنف مطلوب"
+        }
+
+        require(item.itemName.isNotBlank()) {
+            "اسم الصنف مطلوب"
+        }
+
+        require(item.category.isNotBlank()) {
+            "تصنيف الصنف مطلوب"
+        }
+
+        require(item.unit.isNotBlank()) {
+            "وحدة القياس مطلوبة"
+        }
+
+        require(item.minimumStock >= 0) {
+            "الحد الأدنى لا يمكن أن يكون سالباً"
+        }
+
+        val code = item.itemCode.trim()
+
+        require(itemDao.countByCode(code) == 0) {
+            "كود الصنف موجود مسبقاً"
+        }
+
+        return itemDao.insertItem(
+            item.copy(
+                itemCode = code,
+                itemName = item.itemName.trim(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    // تعديل بيانات صنف
+    suspend fun updateItem(item: ItemEntity) {
+
+        require(item.itemCode.isNotBlank()) {
+            "كود الصنف مطلوب"
+        }
+
+        require(item.itemName.isNotBlank()) {
+            "اسم الصنف مطلوب"
+        }
+
+        require(item.minimumStock >= 0) {
+            "الحد الأدنى لا يمكن أن يكون سالباً"
+        }
+
+        itemDao.updateItem(
+            item.copy(
+                itemCode = item.itemCode.trim(),
+                itemName = item.itemName.trim(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    // إيقاف صنف دون حذف سجله
+    suspend fun deactivateItem(id: Long) {
+        itemDao.deactivateItem(id)
+    }
+}
