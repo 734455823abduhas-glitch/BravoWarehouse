@@ -33,20 +33,22 @@ import com.bravo.warehouse.ui.screens.WarehouseScreen
 import com.bravo.warehouse.ui.screens.StockMovementsScreen
 import com.bravo.warehouse.ui.screens.TransferScreen
 import com.bravo.warehouse.ui.screens.StocktakingScreen
+import com.bravo.warehouse.ui.screens.ReportsScreen
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var database: AppDatabase
+private lateinit var database: AppDatabase
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
 
-        database = DatabaseProvider.getDatabase(applicationContext)
+    database = DatabaseProvider.getDatabase(applicationContext)
 
-        setContent {
-            BravoWarehouseApp(database)
-        }
+    setContent {
+        BravoWarehouseApp(database)
     }
+}
+
 }
 
 private val Navy = Color(0xFF17365D)
@@ -56,379 +58,364 @@ private val Green = Color(0xFF238B65)
 @Composable
 fun BravoWarehouseApp(database: AppDatabase) {
 
-    val itemRepository = remember {
-        ItemRepository(database.itemDao())
-    }
+val itemRepository = remember {
+    ItemRepository(database.itemDao())
+}
 
-    val warehouseRepository = remember {
-        WarehouseRepository(database.warehouseDao())
-    }
+val warehouseRepository = remember {
+    WarehouseRepository(database.warehouseDao())
+}
 
-    val movementRepository = remember {
-        StockMovementRepository(database.stockMovementDao())
-    }
+val movementRepository = remember {
+    StockMovementRepository(database.stockMovementDao())
+}
 
-    val transferRepository = remember {
-        TransferRepository(database)
-    }
+val transferRepository = remember {
+    TransferRepository(database)
+}
 
-    val items by itemRepository.getAllItems()
-        .collectAsState(initial = emptyList())
+val items by itemRepository.getAllItems()
+    .collectAsState(initial = emptyList())
 
-    val warehouses by warehouseRepository.getAllWarehouses()
-        .collectAsState(initial = emptyList())
+val warehouses by warehouseRepository.getAllWarehouses()
+    .collectAsState(initial = emptyList())
 
-    var currentScreen by remember {
-        mutableStateOf("dashboard")
-    }
+var currentScreen by remember {
+    mutableStateOf("dashboard")
+}
 
-    var unavailableFeature by remember {
-        mutableStateOf<String?>(null)
-    }
+BackHandler(enabled = currentScreen != "dashboard") {
+    currentScreen = "dashboard"
+}
 
-    BackHandler(enabled = currentScreen != "dashboard") {
-        currentScreen = "dashboard"
-    }
-
-    CompositionLocalProvider(
-        LocalLayoutDirection provides LayoutDirection.Rtl
+CompositionLocalProvider(
+    LocalLayoutDirection provides LayoutDirection.Rtl
+) {
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = Navy,
+            secondary = Green,
+            background = Background
+        )
     ) {
-        MaterialTheme(
-            colorScheme = lightColorScheme(
-                primary = Navy,
-                secondary = Green,
-                background = Background
+
+        when (currentScreen) {
+
+            "items" -> ItemsScreen(
+                repository = itemRepository,
+                onBack = {
+                    currentScreen = "dashboard"
+                }
             )
-        ) {
 
-            when (currentScreen) {
+            "warehouses" -> WarehouseScreen(
+                repository = warehouseRepository,
+                onBack = {
+                    currentScreen = "dashboard"
+                }
+            )
 
-                "items" -> ItemsScreen(
-                    repository = itemRepository,
-                    onBack = {
-                        currentScreen = "dashboard"
-                    }
-                )
+            "movements", "returns" -> StockMovementsScreen(
+                itemRepository = itemRepository,
+                warehouseRepository = warehouseRepository,
+                movementRepository = movementRepository,
+                onBack = {
+                    currentScreen = "dashboard"
+                }
+            )
 
-                "warehouses" -> WarehouseScreen(
-                    repository = warehouseRepository,
-                    onBack = {
-                        currentScreen = "dashboard"
-                    }
-                )
+            "stocktaking" -> StocktakingScreen(
+                itemRepository = itemRepository,
+                warehouseRepository = warehouseRepository,
+                movementRepository = movementRepository,
+                onBack = {
+                    currentScreen = "dashboard"
+                }
+            )
 
-                "movements", "returns" -> StockMovementsScreen(
-                    itemRepository = itemRepository,
-                    warehouseRepository = warehouseRepository,
-                    movementRepository = movementRepository,
-                    onBack = {
-                        currentScreen = "dashboard"
-                    }
-                )
+            "reports" -> ReportsScreen(
+                itemRepository = itemRepository,
+                warehouseRepository = warehouseRepository,
+                movementRepository = movementRepository,
+                onBack = {
+                    currentScreen = "dashboard"
+                }
+            )
 
-                "stocktaking" -> StocktakingScreen(
-                    itemRepository = itemRepository,
-                    warehouseRepository = warehouseRepository,
-                    movementRepository = movementRepository,
-                    onBack = {
-                        currentScreen = "dashboard"
-                    }
-                )
+            "transfers" -> {
 
-                "transfers" -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                ) {
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            TextButton(
-                                onClick = {
-                                    currentScreen = "dashboard"
-                                }
-                            ) {
-                                Text(
-                                    text = "رجوع ←",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Text(
-                                text = "التحويلات بين المخازن",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Navy
-                            )
-                        }
-
-                        HorizontalDivider()
-
-                        Box(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            TransferScreen(
-                                items = items,
-                                warehouses = warehouses,
-                                transferRepository = transferRepository
-                            )
-                        }
-                    }
-                }
-
-                else -> DashboardScreen(
-                    itemCount = items.size,
-                    warehouseCount = warehouses.size,
-                    onMenuClick = { title ->
-
-                        when (title) {
-
-                            "الأصناف" ->
-                                currentScreen = "items"
-
-                            "المخازن" ->
-                                currentScreen = "warehouses"
-
-                            "الوارد", "المنصرف" ->
-                                currentScreen = "movements"
-
-                            "التحويلات" ->
-                                currentScreen = "transfers"
-
-                            "المرتجعات" ->
-                                currentScreen = "returns"
-
-                            "الجرد" ->
-                                currentScreen = "stocktaking"
-
-                            "التقارير" ->
-                                unavailableFeature = title
-                        }
-                    }
-                )
-            }
-
-            if (unavailableFeature != null) {
-
-                AlertDialog(
-                    onDismissRequest = {
-                        unavailableFeature = null
-                    },
-                    title = {
-                        Text("القسم قيد التطوير")
-                    },
-                    text = {
-                        Text("قسم ${unavailableFeature} لم يتم تفعيله بعد.")
-                    },
-                    confirmButton = {
                         TextButton(
                             onClick = {
-                                unavailableFeature = null
+                                currentScreen = "dashboard"
                             }
                         ) {
-                            Text("حسناً")
+                            Text(
+                                text = "رجوع ←",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Text(
+                            text = "التحويلات بين المخازن",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Navy
+                        )
                     }
-                )
+
+                    HorizontalDivider()
+
+                    Box(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        TransferScreen(
+                            items = items,
+                            warehouses = warehouses,
+                            transferRepository = transferRepository
+                        )
+                    }
+                }
             }
+
+            else -> DashboardScreen(
+                itemCount = items.size,
+                warehouseCount = warehouses.size,
+                onMenuClick = { title ->
+
+                    when (title) {
+
+                        "الأصناف" ->
+                            currentScreen = "items"
+
+                        "المخازن" ->
+                            currentScreen = "warehouses"
+
+                        "الوارد", "المنصرف" ->
+                            currentScreen = "movements"
+
+                        "التحويلات" ->
+                            currentScreen = "transfers"
+
+                        "المرتجعات" ->
+                            currentScreen = "returns"
+
+                        "الجرد" ->
+                            currentScreen = "stocktaking"
+
+                        "التقارير" ->
+                            currentScreen = "reports"
+                    }
+                }
+            )
         }
     }
+}
+
 }
 
 @Composable
 fun DashboardScreen(
-    itemCount: Int,
-    warehouseCount: Int,
-    onMenuClick: (String) -> Unit
+itemCount: Int,
+warehouseCount: Int,
+onMenuClick: (String) -> Unit
 ) {
 
-    val menuItems = listOf(
-        "الأصناف" to "📦",
-        "المخازن" to "🏭",
-        "الوارد" to "📥",
-        "المنصرف" to "📤",
-        "التحويلات" to "🔄",
-        "المرتجعات" to "↩️",
-        "الجرد" to "📋",
-        "التقارير" to "📊"
-    )
+val menuItems = listOf(
+    "الأصناف" to "📦",
+    "المخازن" to "🏭",
+    "الوارد" to "📥",
+    "المنصرف" to "📤",
+    "التحويلات" to "🔄",
+    "المرتجعات" to "↩️",
+    "الجرد" to "📋",
+    "التقارير" to "📊"
+)
 
-    Scaffold(
-        containerColor = Background
-    ) { padding ->
+Scaffold(
+    containerColor = Background
+) { padding ->
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(16.dp)
+    ) {
+
+        Text(
+            text = "براڤو برو",
+            fontSize = 27.sp,
+            fontWeight = FontWeight.Bold,
+            color = Navy
+        )
+
+        Text(
+            text = "نظام إدارة المخازن",
+            fontSize = 15.sp,
+            color = Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Navy
+            )
         ) {
 
-            Text(
-                text = "براڤو برو",
-                fontSize = 27.sp,
-                fontWeight = FontWeight.Bold,
-                color = Navy
-            )
-
-            Text(
-                text = "نظام إدارة المخازن",
-                fontSize = 15.sp,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Navy
-                )
+            Column(
+                modifier = Modifier.padding(20.dp)
             ) {
 
-                Column(
-                    modifier = Modifier.padding(20.dp)
+                Text(
+                    text = "لوحة التحكم",
+                    color = Color.White,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
 
-                    Text(
-                        text = "لوحة التحكم",
-                        color = Color.White,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
+                    DashboardStat(
+                        "عدد الأصناف",
+                        itemCount.toString()
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-
-                        DashboardStat(
-                            "عدد الأصناف",
-                            itemCount.toString()
-                        )
-
-                        DashboardStat(
-                            "عدد المخازن",
-                            warehouseCount.toString()
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "إدارة المخزون",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Navy
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-
-                items(menuItems) { item ->
-
-                    MenuCard(
-                        title = item.first,
-                        icon = item.second,
-                        onClick = {
-                            onMenuClick(item.first)
-                        }
+                    DashboardStat(
+                        "عدد المخازن",
+                        warehouseCount.toString()
                     )
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "إدارة المخزون",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Navy
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+
+            items(menuItems) { item ->
+
+                MenuCard(
+                    title = item.first,
+                    icon = item.second,
+                    onClick = {
+                        onMenuClick(item.first)
+                    }
+                )
+            }
+        }
     }
+}
+
 }
 
 @Composable
 fun DashboardStat(
-    title: String,
-    value: String
+title: String,
+value: String
 ) {
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+Column(
+    horizontalAlignment = Alignment.CenterHorizontally
+) {
 
-        Text(
-            text = value,
-            color = Color.White,
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Bold
-        )
+    Text(
+        text = value,
+        color = Color.White,
+        fontSize = 25.sp,
+        fontWeight = FontWeight.Bold
+    )
 
-        Text(
-            text = title,
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center
-        )
-    }
+    Text(
+        text = title,
+        color = Color.White.copy(alpha = 0.85f),
+        fontSize = 12.sp,
+        textAlign = TextAlign.Center
+    )
+}
+
 }
 
 @Composable
 fun MenuCard(
-    title: String,
-    icon: String,
-    onClick: () -> Unit
+title: String,
+icon: String,
+onClick: () -> Unit
 ) {
 
-    Card(
+Card(
+    modifier = Modifier
+        .fillMaxWidth()
+        .height(115.dp)
+        .clickable {
+            onClick()
+        },
+    shape = RoundedCornerShape(16.dp),
+    colors = CardDefaults.cardColors(
+        containerColor = Color.White
+    ),
+    elevation = CardDefaults.cardElevation(
+        defaultElevation = 3.dp
+    )
+) {
+
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(115.dp)
-            .clickable {
-                onClick()
-            },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 3.dp
-        )
+            .fillMaxSize()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Text(
+            text = icon,
+            fontSize = 29.sp
+        )
 
-            Text(
-                text = icon,
-                fontSize = 29.sp
-            )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Navy
-            )
-        }
+        Text(
+            text = title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Navy
+        )
     }
+}
+
 }
