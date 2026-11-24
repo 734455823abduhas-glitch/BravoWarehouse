@@ -1,0 +1,158 @@
+package com.bravo.warehouse.ui.screens
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.bravo.warehouse.data.DatabaseBackupManager
+import kotlinx.coroutines.launch
+
+@Composable
+fun BackupScreen(
+onBack: () -> Unit
+) {
+val context = LocalContext.current
+val scope = rememberCoroutineScope()
+
+var message by remember { mutableStateOf("") }
+var isLoading by remember { mutableStateOf(false) }
+
+val backupLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+) { uri: Uri? ->
+    if (uri != null) {
+        scope.launch {
+            isLoading = true
+            message = ""
+            try {
+                DatabaseBackupManager.exportBackup(context, uri)
+                message = "تم إنشاء النسخة الاحتياطية بنجاح"
+            } catch (e: Exception) {
+                message = "فشل إنشاء النسخة: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+}
+
+val restoreLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument()
+) { uri: Uri? ->
+    if (uri != null) {
+        scope.launch {
+            isLoading = true
+            message = ""
+            try {
+                DatabaseBackupManager.importBackup(context, uri)
+                message = "تمت استعادة النسخة الاحتياطية بنجاح"
+            } catch (e: Exception) {
+                message = "فشلت الاستعادة: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+}
+
+Column(
+    modifier = Modifier
+        .fillMaxSize()
+        .padding(20.dp),
+    horizontalAlignment = Alignment.CenterHorizontally
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onBack) {
+            Text("رجوع ←")
+        }
+
+        Text(
+            text = "النسخ الاحتياطي والاستعادة",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    HorizontalDivider()
+
+    Spacer(modifier = Modifier.height(30.dp))
+
+    Text(
+        text = "حماية بيانات المخازن",
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF17365D)
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    Text(
+        text = "يمكنك حفظ نسخة من قاعدة البيانات أو استعادة نسخة سابقة.",
+        fontSize = 15.sp
+    )
+
+    Spacer(modifier = Modifier.height(35.dp))
+
+    Button(
+        onClick = {
+            backupLauncher.launch("BravoWarehouse_Backup.db")
+        },
+        enabled = !isLoading,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text("إنشاء نسخة احتياطية")
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    OutlinedButton(
+        onClick = {
+            restoreLauncher.launch(arrayOf("*/*"))
+        },
+        enabled = !isLoading,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text("استعادة نسخة احتياطية")
+    }
+
+    Spacer(modifier = Modifier.height(25.dp))
+
+    if (isLoading) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("يرجى الانتظار...")
+    }
+
+    if (message.isNotEmpty()) {
+        Text(
+            text = message,
+            color = if (message.startsWith("تم"))
+                Color(0xFF238B65)
+            else
+                Color.Red,
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Text(
+        text = "تنبيه: استعادة نسخة احتياطية تستبدل البيانات الحالية بالبيانات الموجودة في النسخة المختارة.",
+        color = Color.Gray,
+        fontSize = 13.sp
+    )
+}
+
+}
