@@ -4,12 +4,12 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import androidx.room.Room
-import com.bravo.warehouse.data.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.UUID
 
 object DatabaseBackupManager {
 
@@ -30,14 +30,17 @@ suspend fun exportBackup(
             .query("PRAGMA wal_checkpoint(TRUNCATE)")
             .use { cursor ->
                 if (cursor.moveToFirst() && cursor.getInt(0) != 0) {
-                    throw Exception("تعذر إتمام حفظ بيانات قاعدة البيانات")
+                    throw Exception("تعذر حفظ بيانات قاعدة البيانات")
                 }
             }
 
         DatabaseProvider.closeDatabase()
 
         context.contentResolver.openOutputStream(destination, "wt").use { output ->
-            requireNotNull(output) { "تعذر فتح ملف النسخة الاحتياطية" }
+            requireNotNull(output) {
+                "تعذر فتح ملف النسخة الاحتياطية"
+            }
+
             FileInputStream(dbFile).use { input ->
                 input.copyTo(output)
                 output.flush()
@@ -58,17 +61,26 @@ suspend fun importBackup(
     val dbDirectory = dbFile.parentFile
         ?: throw Exception("تعذر تحديد مجلد قاعدة البيانات")
 
-    if (!dbDirectory.exists()) dbDirectory.mkdirs()
+    if (!dbDirectory.exists()) {
+        check(dbDirectory.mkdirs()) {
+            "تعذر إنشاء مجلد قاعدة البيانات"
+        }
+    }
 
-    val tempFile = File(dbDirectory, "bravo_restore_temp.db")
-    val rollbackFile = File(dbDirectory, "bravo_restore_rollback.db")
+    val suffix = UUID.randomUUID().toString()
 
-    tempFile.delete()
-    rollbackFile.delete()
+    val tempFile = File(dbDirectory, "bravo_restore_$suffix.db")
+    val rollbackFile = File(dbDirectory, "bravo_rollback_$suffix.db")
+
+    var databaseClosed = false
+    var oldDatabaseMoved = false
 
     try {
         context.contentResolver.openInputStream(source).use { input ->
-            requireNotNull(input) { "تعذر قراءة ملف النسخة الاحتياطية" }
+            requireNotNull(input) {
+                "تعذر قراءة ملف النسخة الاحتياطية"
+            }
+
             FileOutputStream(tempFile).use { output ->
                 input.copyTo(output)
                 output.flush()
@@ -79,50 +91,66 @@ suspend fun importBackup(
         validateBackup(context, tempFile)
 
         DatabaseProvider.closeDatabase()
+        databaseClosed = true
 
         val walFile = File(dbFile.path + "-wal")
         val shmFile = File(dbFile.path + "-shm")
 
-        if (dbFile.exists()) {
-            if (!dbFile.renameTo(rollbackFile)) {
-                throw Exception("تعذر حفظ قاعدة البيانات الحالية")
-            }
-        }
-
         walFile.delete()
         shmFile.delete()
 
-        if (!tempFile.renameTo(dbFile)) {
-            if (rollbackFile.exists()) {
-                rollbackFile.renameTo(dbFile)
+        if (dbFile.exists()) {
+            check(dbFile.renameTo(rollbackFile)) {
+                "تعذر حفظ قاعدة البيانات الحالية"
             }
-            throw Exception("تعذر تثبيت النسخة الاحتياطية")
+            oldDatabaseMoved = true
         }
 
-        try {
-            DatabaseProvider.getDatabase(context)
-        } catch (e: Exception) {
-            DatabaseProvider.closeDatabase()
-            dbFile.delete()
-
-            if (rollbackFile.exists()) {
-                rollbackFile.renameTo(dbFile)
-            }
-
-            DatabaseProvider.getDatabase(context)
-            throw Exception("النسخة غير متوافقة، تمت محاولة استعادة البيانات السابقة")
+        check(tempFile.renameTo(dbFile)) {
+            "تعذر تثبيت النسخة الاحتياطية"
         }
+
+        // فتح قاعدة البيانات الجديدة للتأكد من سلامتها.
+        DatabaseProvider.getDatabase(context)
+        databaseClosed = false
 
         rollbackFile.delete()
 
     } catch (e: Exception) {
-        tempFile.delete()
 
-        if (!dbFile.exists() && rollbackFile.exists()) {
-            rollbackFile.renameTo(dbFile)
+        try {
+            if (databaseClosed || oldDatabaseMoved) {
+                DatabaseProvider.closeDatabase()
+            }
+
+            if (oldDatabaseMoved && rollbackFile.exists()) {
+                dbFile.delete()
+                File(dbFile.path + "-wal").delete()
+                File(dbFile.path + "-shm").delete()
+
+                check(rollbackFile.renameTo(dbFile)) {
+                    "تعذرت استعادة قاعدة البيانات السابقة"
+                }
+            }
+
+            DatabaseProvider.getDatabase(context)
+            databaseClosed = false
+
+        } catch (restoreError: Exception) {
+            e.addSuppressed(restoreError)
         }
 
         throw e
+
+    } finally {
+        tempFile.delete()
+
+        File(tempFile.path + "-wal").delete()
+        File(tempFile.path + "-shm").delete()
+
+        if (databaseClosed) {
+            DatabaseProvider.getDatabase(context)
+        }
     }
 }
 
@@ -178,11 +206,11 @@ private fun validateBackup(
         sqlite.close()
     }
 
-    // اختبار توافق النسخة مع مخطط Room قبل استبدال قاعدة البيانات الحالية.
+    // اختبار مخطط Room باستخدام اسم الملف داخل مجلد قواعد بيانات التطبيق.
     val testDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
-        file.absolutePath
+        file.name
     ).build()
 
     try {
@@ -190,6 +218,9 @@ private fun validateBackup(
     } finally {
         testDatabase.close()
     }
+
+    File(file.path + "-wal").delete()
+    File(file.path + "-shm").delete()
 }
 
 }
