@@ -1,6 +1,8 @@
 package com.bravo.warehouse.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import com.bravo.warehouse.data.repository.StockMovementRepository
 import com.bravo.warehouse.data.repository.TransferRepository
 import com.bravo.warehouse.util.DateTimeUtils
 import com.bravo.warehouse.util.ReportExportUtils
+import java.io.File
 
 private val ReportNavy = Color(0xFF082F68)
 private val ReportRed = Color(0xFFE5242A)
@@ -39,6 +42,64 @@ fun ReportsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+
+    var pendingSaveFile by remember {
+        mutableStateOf<File?>(null)
+    }
+
+    val pdfSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        val file = pendingSaveFile
+
+        if (uri != null && file != null) {
+            try {
+                ReportExportUtils.saveToUri(context, file, uri)
+
+                Toast.makeText(
+                    context,
+                    "تم حفظ ملف PDF بنجاح",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "فشل حفظ PDF: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        pendingSaveFile = null
+    }
+
+    val excelSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    ) { uri ->
+        val file = pendingSaveFile
+
+        if (uri != null && file != null) {
+            try {
+                ReportExportUtils.saveToUri(context, file, uri)
+
+                Toast.makeText(
+                    context,
+                    "تم حفظ ملف Excel بنجاح",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "فشل حفظ Excel: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        pendingSaveFile = null
+    }
 
     val items by itemRepository.getAllItemsIncludingInactive()
         .collectAsState(initial = emptyList())
@@ -756,6 +817,109 @@ fun ReportsScreen(
                         "تصدير Excel",
                         color = Color.White,
                         style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // أزرار الحفظ المباشر في الهاتف
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "لا توجد بيانات لحفظها",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createPdf(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+
+                                pendingSaveFile = file
+
+                                pdfSaveLauncher.launch(
+                                    "${file.nameWithoutExtension}.pdf"
+                                )
+
+                            } catch (e: Exception) {
+                                pendingSaveFile = null
+
+                                Toast.makeText(
+                                    context,
+                                    "تعذر تجهيز PDF: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportRed
+                    )
+                ) {
+                    Text(
+                        "حفظ PDF",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "لا توجد بيانات لحفظها",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createExcel(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+
+                                pendingSaveFile = file
+
+                                excelSaveLauncher.launch(
+                                    "${file.nameWithoutExtension}.xlsx"
+                                )
+
+                            } catch (e: Exception) {
+                                pendingSaveFile = null
+
+                                Toast.makeText(
+                                    context,
+                                    "تعذر تجهيز Excel: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportNavy
+                    )
+                ) {
+                    Text(
+                        "حفظ Excel",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
