@@ -1,17 +1,31 @@
 package com.bravo.warehouse.ui.screens
 
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bravo.warehouse.data.entity.WarehouseEntity
+
+private val BravoNavy = Color(0xFF082F68)
+private val BravoDarkNavy = Color(0xFF062451)
+private val BravoRed = Color(0xFFE5242A)
+private val BravoBackground = Color(0xFFF3F6FC)
+private val BravoWhite = Color.White
+private val BravoText = Color(0xFF102B50)
+private val BravoMuted = Color(0xFF526783)
+private val BravoBorder = Color(0xFFB7C8DF)
+private val BravoLightBlue = Color(0xFFE8EFF9)
 
 @Composable
 fun SettingsScreen(
@@ -66,305 +80,440 @@ var timeFormat by remember {
 var warehouseExpanded by remember { mutableStateOf(false) }
 var dateExpanded by remember { mutableStateOf(false) }
 var timeExpanded by remember { mutableStateOf(false) }
-
 var savedMessage by remember { mutableStateOf(false) }
 
 val selectedWarehouse = warehouses.firstOrNull {
     it.id == selectedWarehouseId
 }
 
-Column(
-    modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)
+MaterialTheme(
+    colorScheme = lightColorScheme(
+        primary = BravoNavy,
+        onPrimary = BravoWhite,
+        secondary = BravoRed,
+        onSecondary = BravoWhite,
+        background = BravoBackground,
+        onBackground = BravoText,
+        surface = BravoWhite,
+        onSurface = BravoText,
+        outline = BravoBorder
+    )
 ) {
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BravoBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
     ) {
-        TextButton(onClick = onBack) {
-            Text("رجوع ←")
-        }
 
-        Text(
-            text = "إعدادات التطبيق",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-
-    HorizontalDivider()
-
-    Spacer(Modifier.height(18.dp))
-
-    Text(
-        "بيانات المنشأة",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-
-    Spacer(Modifier.height(10.dp))
-
-    OutlinedTextField(
-        value = factoryName,
-        onValueChange = {
-            factoryName = it
-            savedMessage = false
-        },
-        label = { Text("اسم المصنع") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true
-    )
-
-    Spacer(Modifier.height(22.dp))
-
-    HorizontalDivider()
-
-    Spacer(Modifier.height(18.dp))
-
-    Text(
-        "إعدادات المخازن",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-
-    Spacer(Modifier.height(10.dp))
-
-    Text(
-        "المخزن الافتراضي",
-        fontWeight = FontWeight.Medium
-    )
-
-    Spacer(Modifier.height(6.dp))
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-
-        OutlinedButton(
-            onClick = {
-                warehouseExpanded = true
-            },
-            modifier = Modifier.fillMaxWidth()
+        // رأس الشاشة
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    BravoNavy,
+                    RoundedCornerShape(16.dp)
+                )
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                selectedWarehouse?.warehouseName
-                    ?: if (selectedWarehouseId == 0L) {
-                        "لم يتم تحديد مخزن افتراضي"
-                    } else {
-                        "المخزن المحفوظ غير متاح"
-                    }
-            )
-        }
-
-        DropdownMenu(
-            expanded = warehouseExpanded,
-            onDismissRequest = {
-                warehouseExpanded = false
+            TextButton(
+                onClick = onBack,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = BravoWhite
+                )
+            ) {
+                Text(
+                    "رجوع ←",
+                    fontWeight = FontWeight.Bold
+                )
             }
-        ) {
 
-            DropdownMenuItem(
-                text = { Text("بدون مخزن افتراضي") },
-                onClick = {
-                    selectedWarehouseId = 0L
-                    warehouseExpanded = false
-                    savedMessage = false
-                }
+            Spacer(Modifier.width(8.dp))
+
+            Text(
+                text = "إعدادات التطبيق",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = BravoWhite
             )
+        }
 
-            warehouses.forEach { warehouse ->
+        Spacer(Modifier.height(20.dp))
 
+        // بيانات المنشأة
+        SectionTitle("بيانات المنشأة")
+
+        Spacer(Modifier.height(10.dp))
+
+        OutlinedTextField(
+            value = factoryName,
+            onValueChange = {
+                factoryName = it
+                savedMessage = false
+            },
+            label = {
+                Text("اسم المصنع")
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            textStyle = LocalTextStyle.current.copy(
+                color = BravoText,
+                fontSize = 17.sp
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = BravoText,
+                unfocusedTextColor = BravoText,
+                focusedBorderColor = BravoNavy,
+                unfocusedBorderColor = BravoBorder,
+                focusedLabelColor = BravoNavy,
+                unfocusedLabelColor = BravoMuted,
+                cursorColor = BravoRed,
+                focusedContainerColor = BravoWhite,
+                unfocusedContainerColor = BravoWhite
+            ),
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Spacer(Modifier.height(22.dp))
+        SectionDivider()
+        Spacer(Modifier.height(18.dp))
+
+        // إعدادات المخازن
+        SectionTitle("إعدادات المخازن")
+
+        Spacer(Modifier.height(10.dp))
+
+        FieldLabel("المخزن الافتراضي")
+
+        Spacer(Modifier.height(6.dp))
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+
+            OutlinedButton(
+                onClick = {
+                    warehouseExpanded = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = BravoNavy,
+                    containerColor = BravoWhite
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(
+                        BravoBorder
+                    )
+                )
+            ) {
+                Text(
+                    selectedWarehouse?.warehouseName
+                        ?: if (selectedWarehouseId == 0L) {
+                            "لم يتم تحديد مخزن افتراضي"
+                        } else {
+                            "المخزن المحفوظ غير متاح"
+                        },
+                    fontSize = 16.sp,
+                    color = BravoText
+                )
+            }
+
+            DropdownMenu(
+                expanded = warehouseExpanded,
+                onDismissRequest = {
+                    warehouseExpanded = false
+                },
+                modifier = Modifier.background(BravoWhite)
+            ) {
                 DropdownMenuItem(
                     text = {
-                        Text(warehouse.warehouseName)
+                        Text(
+                            "بدون مخزن افتراضي",
+                            color = BravoText
+                        )
                     },
                     onClick = {
-                        selectedWarehouseId = warehouse.id
+                        selectedWarehouseId = 0L
                         warehouseExpanded = false
                         savedMessage = false
                     }
                 )
+
+                warehouses.forEach { warehouse ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                warehouse.warehouseName,
+                                color = BravoText
+                            )
+                        },
+                        onClick = {
+                            selectedWarehouseId = warehouse.id
+                            warehouseExpanded = false
+                            savedMessage = false
+                        }
+                    )
+                }
             }
         }
-    }
 
-    Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(22.dp))
+        SectionDivider()
+        Spacer(Modifier.height(18.dp))
 
-    HorizontalDivider()
+        // إعدادات التاريخ والوقت
+        SectionTitle("إعدادات التاريخ والوقت")
 
-    Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
 
-    Text(
-        "إعدادات التاريخ والوقت",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
+        FieldLabel("تنسيق التاريخ")
 
-    Spacer(Modifier.height(10.dp))
+        Box(modifier = Modifier.fillMaxWidth()) {
 
-    Text("تنسيق التاريخ")
+            OutlinedButton(
+                onClick = {
+                    dateExpanded = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = BravoNavy,
+                    containerColor = BravoWhite
+                )
+            ) {
+                Text(
+                    dateFormat,
+                    fontSize = 17.sp,
+                    color = BravoText
+                )
+            }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
-
-        OutlinedButton(
-            onClick = {
-                dateExpanded = true
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(dateFormat)
+            DropdownMenu(
+                expanded = dateExpanded,
+                onDismissRequest = {
+                    dateExpanded = false
+                },
+                modifier = Modifier.background(BravoWhite)
+            ) {
+                listOf(
+                    "dd/MM/yyyy",
+                    "yyyy-MM-dd",
+                    "dd-MM-yyyy"
+                ).forEach { format ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(format, color = BravoText)
+                        },
+                        onClick = {
+                            dateFormat = format
+                            dateExpanded = false
+                            savedMessage = false
+                        }
+                    )
+                }
+            }
         }
 
-        DropdownMenu(
-            expanded = dateExpanded,
-            onDismissRequest = {
-                dateExpanded = false
-            }
-        ) {
+        Spacer(Modifier.height(14.dp))
 
-            listOf(
-                "dd/MM/yyyy",
-                "yyyy-MM-dd",
-                "dd-MM-yyyy"
-            ).forEach { format ->
+        FieldLabel("تنسيق الوقت")
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+
+            OutlinedButton(
+                onClick = {
+                    timeExpanded = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = BravoNavy,
+                    containerColor = BravoWhite
+                )
+            ) {
+                Text(
+                    if (timeFormat == "24") {
+                        "24 ساعة"
+                    } else {
+                        "12 ساعة"
+                    },
+                    fontSize = 17.sp,
+                    color = BravoText
+                )
+            }
+
+            DropdownMenu(
+                expanded = timeExpanded,
+                onDismissRequest = {
+                    timeExpanded = false
+                },
+                modifier = Modifier.background(BravoWhite)
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text("24 ساعة", color = BravoText)
+                    },
+                    onClick = {
+                        timeFormat = "24"
+                        timeExpanded = false
+                        savedMessage = false
+                    }
+                )
 
                 DropdownMenuItem(
-                    text = { Text(format) },
+                    text = {
+                        Text("12 ساعة", color = BravoText)
+                    },
                     onClick = {
-                        dateFormat = format
-                        dateExpanded = false
+                        timeFormat = "12"
+                        timeExpanded = false
                         savedMessage = false
                     }
                 )
             }
         }
-    }
 
-    Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(22.dp))
 
-    Text("تنسيق الوقت")
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-
-        OutlinedButton(
+        // حفظ الإعدادات
+        Button(
             onClick = {
-                timeExpanded = true
+                preferences.edit()
+                    .putString("factory_name", factoryName.trim())
+                    .putLong("default_warehouse_id", selectedWarehouseId)
+                    .putString("date_format", dateFormat)
+                    .putString("time_format", timeFormat)
+                    .apply()
+
+                savedMessage = true
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            enabled = factoryName.isNotBlank(),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BravoNavy,
+                contentColor = BravoWhite,
+                disabledContainerColor = BravoMuted
+            )
         ) {
             Text(
-                if (timeFormat == "24") {
-                    "24 ساعة"
-                } else {
-                    "12 ساعة"
-                }
+                "حفظ جميع الإعدادات",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        DropdownMenu(
-            expanded = timeExpanded,
-            onDismissRequest = {
-                timeExpanded = false
-            }
+        if (savedMessage) {
+            Text(
+                text = "تم حفظ الإعدادات بنجاح",
+                color = Color(0xFF168052),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 10.dp)
+            )
+        }
+
+        Spacer(Modifier.height(22.dp))
+        SectionDivider()
+        Spacer(Modifier.height(18.dp))
+
+        // معلومات المخزون
+        SectionTitle("معلومات المخزون")
+
+        Spacer(Modifier.height(10.dp))
+
+        InfoCard("عدد الأصناف", itemCount.toString())
+        InfoCard("عدد المخازن النشطة", warehouseCount.toString())
+
+        Spacer(Modifier.height(20.dp))
+
+        // النسخ الاحتياطي
+        SectionTitle("النسخ الاحتياطي")
+
+        OutlinedButton(
+            onClick = onBackupClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .height(52.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = BravoNavy,
+                containerColor = BravoWhite
+            )
         ) {
-
-            DropdownMenuItem(
-                text = { Text("24 ساعة") },
-                onClick = {
-                    timeFormat = "24"
-                    timeExpanded = false
-                    savedMessage = false
-                }
-            )
-
-            DropdownMenuItem(
-                text = { Text("12 ساعة") },
-                onClick = {
-                    timeFormat = "12"
-                    timeExpanded = false
-                    savedMessage = false
-                }
+            Text(
+                "إدارة النسخ الاحتياطي والاستعادة",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
             )
         }
+
+        Spacer(Modifier.height(20.dp))
+
+        SectionTitle("حول التطبيق")
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = BravoLightBlue
+            )
+        ) {
+            Text(
+                text = "Bravo Warehouse\nنظام إدارة مخازن براڤو برو\nالإصدار 1.0.2",
+                modifier = Modifier.padding(16.dp),
+                color = BravoText,
+                fontSize = 15.sp,
+                lineHeight = 25.sp
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
-
-    Spacer(Modifier.height(22.dp))
-
-    Button(
-        onClick = {
-
-            preferences.edit()
-                .putString("factory_name", factoryName.trim())
-                .putLong("default_warehouse_id", selectedWarehouseId)
-                .putString("date_format", dateFormat)
-                .putString("time_format", timeFormat)
-                .apply()
-
-            savedMessage = true
-        },
-        modifier = Modifier.fillMaxWidth(),
-        enabled = factoryName.isNotBlank()
-    ) {
-        Text("حفظ جميع الإعدادات")
-    }
-
-    if (savedMessage) {
-        Text(
-            text = "تم حفظ الإعدادات بنجاح",
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
-
-    Spacer(Modifier.height(22.dp))
-
-    HorizontalDivider()
-
-    Spacer(Modifier.height(18.dp))
-
-    Text(
-        "معلومات المخزون",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-
-    Spacer(Modifier.height(8.dp))
-
-    InfoCard("عدد الأصناف", itemCount.toString())
-    InfoCard("عدد المخازن النشطة", warehouseCount.toString())
-
-    Spacer(Modifier.height(18.dp))
-
-    Text(
-        "النسخ الاحتياطي",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-
-    OutlinedButton(
-        onClick = onBackupClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-    ) {
-        Text("إدارة النسخ الاحتياطي والاستعادة")
-    }
-
-    Spacer(Modifier.height(18.dp))
-
-    Text(
-        "حول التطبيق",
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-
-    Text(
-        "Bravo Warehouse\nنظام إدارة مخازن براڤو برو\nالإصدار 1.0.2",
-        modifier = Modifier.padding(top = 8.dp),
-        lineHeight = 25.sp
-    )
 }
 
+}
+
+@Composable
+private fun SectionTitle(title: String) {
+Text(
+text = title,
+fontSize = 19.sp,
+fontWeight = FontWeight.Bold,
+color = BravoNavy,
+modifier = Modifier
+.fillMaxWidth()
+.background(
+BravoLightBlue,
+RoundedCornerShape(10.dp)
+)
+.padding(horizontal = 12.dp, vertical = 10.dp)
+)
+}
+
+@Composable
+private fun FieldLabel(title: String) {
+Text(
+text = title,
+fontSize = 16.sp,
+fontWeight = FontWeight.SemiBold,
+color = BravoText
+)
+}
+
+@Composable
+private fun SectionDivider() {
+HorizontalDivider(
+color = BravoBorder,
+thickness = 1.dp
+)
 }
 
 @Composable
@@ -375,8 +524,14 @@ value: String
 Card(
 modifier = Modifier
 .fillMaxWidth()
-.padding(vertical = 4.dp),
-shape = RoundedCornerShape(12.dp)
+.padding(vertical = 5.dp),
+shape = RoundedCornerShape(12.dp),
+colors = CardDefaults.cardColors(
+containerColor = BravoWhite
+),
+elevation = CardDefaults.cardElevation(
+defaultElevation = 2.dp
+)
 ) {
 Row(
 modifier = Modifier
@@ -385,11 +540,19 @@ modifier = Modifier
 horizontalArrangement = Arrangement.SpaceBetween,
 verticalAlignment = Alignment.CenterVertically
 ) {
-Text(title)
 Text(
-value,
-fontWeight = FontWeight.Bold
+text = title,
+color = BravoText,
+fontSize = 15.sp
 )
+
+        Text(
+            text = value,
+            fontWeight = FontWeight.Bold,
+            color = BravoNavy,
+            fontSize = 17.sp
+        )
+    }
 }
-}
+
 }
