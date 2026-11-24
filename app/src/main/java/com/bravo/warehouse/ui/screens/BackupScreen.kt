@@ -4,15 +4,17 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import com.bravo.warehouse.data.DatabaseBackupManager
 import kotlinx.coroutines.launch
 
@@ -26,14 +28,17 @@ val scope = rememberCoroutineScope()
 
 var message by remember { mutableStateOf("") }
 var isLoading by remember { mutableStateOf(false) }
+var showRestoreDialog by remember { mutableStateOf(false) }
 
 val backupLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.CreateDocument("application/octet-stream")
 ) { uri: Uri? ->
-    if (uri != null) {
+
+    if (uri != null && !isLoading) {
         scope.launch {
             isLoading = true
             message = ""
+
             try {
                 DatabaseBackupManager.exportBackup(context, uri)
                 message = "تم إنشاء النسخة الاحتياطية بنجاح"
@@ -49,13 +54,15 @@ val backupLauncher = rememberLauncherForActivityResult(
 val restoreLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.OpenDocument()
 ) { uri: Uri? ->
-    if (uri != null) {
+
+    if (uri != null && !isLoading) {
         scope.launch {
             isLoading = true
             message = ""
+
             try {
                 DatabaseBackupManager.importBackup(context, uri)
-                message = "تمت الاستعادة بنجاح، جارٍ تحديث التطبيق"
+                message = "تمت الاستعادة بنجاح"
                 onRestoreComplete()
             } catch (e: Exception) {
                 message = "فشلت الاستعادة: ${e.message}"
@@ -66,95 +73,130 @@ val restoreLauncher = rememberLauncherForActivityResult(
     }
 }
 
-Column(
-    modifier = Modifier
-        .fillMaxSize()
-        .padding(20.dp),
-    horizontalAlignment = Alignment.CenterHorizontally
+CompositionLocalProvider(
+    LocalLayoutDirection provides LayoutDirection.Rtl
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        TextButton(onClick = onBack) {
-            Text("رجوع ←")
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = onBack,
+                enabled = !isLoading
+            ) {
+                Text("رجوع")
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = "النسخ الاحتياطي",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+
         Text(
-            text = "النسخ الاحتياطي والاستعادة",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
+            text = "حافظ على بيانات المخازن بإنشاء نسخة احتياطية، ويمكنك استعادتها عند الحاجة.",
+            fontSize = 16.sp,
+            lineHeight = 25.sp
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Button(
+            onClick = {
+                backupLauncher.launch("BravoWarehouse_Backup.db")
+            },
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "إنشاء نسخة احتياطية",
+                modifier = Modifier.padding(8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = {
+                showRestoreDialog = true
+            },
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "استعادة نسخة احتياطية",
+                modifier = Modifier.padding(8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator()
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text("يرجى الانتظار...")
+        }
+
+        if (message.isNotEmpty()) {
+            Text(
+                text = message,
+                fontSize = 15.sp,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+        }
+    }
+
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreDialog = false
+            },
+            title = {
+                Text("تأكيد الاستعادة")
+            },
+            text = {
+                Text(
+                    "تنبيه: ستُستبدل بيانات المخازن الحالية " +
+                        "بالبيانات الموجودة في النسخة الاحتياطية. هل تريد المتابعة؟"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreDialog = false
+                        restoreLauncher.launch(arrayOf("*/*"))
+                    }
+                ) {
+                    Text("متابعة")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreDialog = false
+                    }
+                ) {
+                    Text("إلغاء")
+                }
+            }
         )
     }
-
-    HorizontalDivider()
-
-    Spacer(modifier = Modifier.height(30.dp))
-
-    Text(
-        text = "حماية بيانات المخازن",
-        fontSize = 22.sp,
-        fontWeight = FontWeight.Bold,
-        color = Color(0xFF17365D)
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    Text(
-        text = "يمكنك حفظ نسخة من قاعدة البيانات أو استعادة نسخة سابقة.",
-        fontSize = 15.sp
-    )
-
-    Spacer(modifier = Modifier.height(35.dp))
-
-    Button(
-        onClick = {
-            backupLauncher.launch("BravoWarehouse_Backup.db")
-        },
-        enabled = !isLoading,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text("إنشاء نسخة احتياطية")
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    OutlinedButton(
-        onClick = {
-            restoreLauncher.launch(arrayOf("*/*"))
-        },
-        enabled = !isLoading,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text("استعادة نسخة احتياطية")
-    }
-
-    Spacer(modifier = Modifier.height(25.dp))
-
-    if (isLoading) {
-        CircularProgressIndicator()
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("يرجى الانتظار...")
-    }
-
-    if (message.isNotEmpty()) {
-        Text(
-            text = message,
-            color = if (message.startsWith("تم"))
-                Color(0xFF238B65)
-            else
-                Color.Red,
-            fontWeight = FontWeight.Bold
-        )
-    }
-
-    Spacer(modifier = Modifier.height(20.dp))
-
-    Text(
-        text = "تنبيه: استعادة نسخة احتياطية تستبدل البيانات الحالية بالبيانات الموجودة في النسخة المختارة.",
-        color = Color.Gray,
-        fontSize = 13.sp
-    )
 }
 
 }
