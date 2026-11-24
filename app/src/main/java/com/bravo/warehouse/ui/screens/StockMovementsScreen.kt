@@ -252,7 +252,7 @@ fun StockMovementsScreen(
                     return@Button
                 }
 
-                if (qty == null || qty <= 0) {
+                if (qty == null || !qty.isFinite() || qty <= 0) {
                     message = "يرجى إدخال كمية صحيحة"
                     return@Button
                 }
@@ -356,16 +356,27 @@ fun StockMovementsScreen(
                             modifier = Modifier.padding(12.dp)
                         ) {
                             Text(
-                                text = if (movement.movementType == "IN")
-                                    "وارد"
-                                else
-                                    "منصرف",
+                                text = when (movement.movementType) {
+                                    "IN" -> "وارد"
+                                    "OUT" -> "منصرف"
+                                    "RETURN_IN" -> "مرتجع للمخزن"
+                                    "RETURN_OUT" -> "مرتجع من المخزن"
+                                    "ADJUSTMENT_IN" -> "تسوية بالزيادة"
+                                    "ADJUSTMENT_OUT" -> "تسوية بالنقص"
+                                    "TRANSFER" -> "تحويل"
+                                    else -> "حركة أخرى"
+                                },
                                 style = MaterialTheme.typography.titleMedium
                             )
 
                             Text("الصنف: ${item?.itemName ?: movement.itemId}")
-                            Text("المخزن: ${warehouse?.warehouseName ?: movement.warehouseId}")
+
+                            Text(
+                                "المخزن: ${warehouse?.warehouseName ?: movement.warehouseId}"
+                            )
+
                             Text("الكمية: ${movement.quantity}")
+
                             Text(
                                 if (movement.isApproved)
                                     "الحالة: معتمدة"
