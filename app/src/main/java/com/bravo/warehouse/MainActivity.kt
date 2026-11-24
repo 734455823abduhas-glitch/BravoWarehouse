@@ -91,6 +91,7 @@ BackHandler(enabled = currentScreen != "dashboard") {
 CompositionLocalProvider(
     LocalLayoutDirection provides LayoutDirection.Rtl
 ) {
+
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Navy,
@@ -137,6 +138,7 @@ CompositionLocalProvider(
                 itemRepository = itemRepository,
                 warehouseRepository = warehouseRepository,
                 movementRepository = movementRepository,
+                transferRepository = transferRepository,
                 onBack = {
                     currentScreen = "dashboard"
                 }
@@ -167,7 +169,9 @@ CompositionLocalProvider(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(
+                            modifier = Modifier.width(12.dp)
+                        )
 
                         Text(
                             text = "التحويلات بين المخازن",
@@ -222,199 +226,6 @@ CompositionLocalProvider(
                 }
             )
         }
-    }
-}
-
-}
-
-@Composable
-fun DashboardScreen(
-itemCount: Int,
-warehouseCount: Int,
-onMenuClick: (String) -> Unit
-) {
-
-val menuItems = listOf(
-    "الأصناف" to "📦",
-    "المخازن" to "🏭",
-    "الوارد" to "📥",
-    "المنصرف" to "📤",
-    "التحويلات" to "🔄",
-    "المرتجعات" to "↩️",
-    "الجرد" to "📋",
-    "التقارير" to "📊"
-)
-
-Scaffold(
-    containerColor = Background
-) { padding ->
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(16.dp)
-    ) {
-
-        Text(
-            text = "براڤو برو",
-            fontSize = 27.sp,
-            fontWeight = FontWeight.Bold,
-            color = Navy
-        )
-
-        Text(
-            text = "نظام إدارة المخازن",
-            fontSize = 15.sp,
-            color = Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Navy
-            )
-        ) {
-
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-
-                Text(
-                    text = "لوحة التحكم",
-                    color = Color.White,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-
-                    DashboardStat(
-                        "عدد الأصناف",
-                        itemCount.toString()
-                    )
-
-                    DashboardStat(
-                        "عدد المخازن",
-                        warehouseCount.toString()
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "إدارة المخزون",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Navy
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-
-            items(menuItems) { item ->
-
-                MenuCard(
-                    title = item.first,
-                    icon = item.second,
-                    onClick = {
-                        onMenuClick(item.first)
-                    }
-                )
-            }
-        }
-    }
-}
-
-}
-
-@Composable
-fun DashboardStat(
-title: String,
-value: String
-) {
-
-Column(
-    horizontalAlignment = Alignment.CenterHorizontally
-) {
-
-    Text(
-        text = value,
-        color = Color.White,
-        fontSize = 25.sp,
-        fontWeight = FontWeight.Bold
-    )
-
-    Text(
-        text = title,
-        color = Color.White.copy(alpha = 0.85f),
-        fontSize = 12.sp,
-        textAlign = TextAlign.Center
-    )
-}
-
-}
-
-@Composable
-fun MenuCard(
-title: String,
-icon: String,
-onClick: () -> Unit
-) {
-
-Card(
-    modifier = Modifier
-        .fillMaxWidth()
-        .height(115.dp)
-        .clickable {
-            onClick()
-        },
-    shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(
-        containerColor = Color.White
-    ),
-    elevation = CardDefaults.cardElevation(
-        defaultElevation = 3.dp
-    )
-) {
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-
-        Text(
-            text = icon,
-            fontSize = 29.sp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = Navy
-        )
     }
 }
 
