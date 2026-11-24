@@ -4,26 +4,30 @@ import com.bravo.warehouse.data.dao.ItemDao
 import com.bravo.warehouse.data.entity.ItemEntity
 
 class ItemRepository(
-private val itemDao: ItemDao
+    private val itemDao: ItemDao
 ) {
 
-fun getAllItems() =
-    itemDao.getAllItems()
+    // الأصناف النشطة لشاشات الإدخال
+    fun getAllItems() =
+        itemDao.getAllItems()
 
-fun searchItems(search: String) =
-    itemDao.searchItems(search)
+    // جميع الأصناف للتقارير والسجل التاريخي
+    fun getAllItemsIncludingInactive() =
+        itemDao.getAllItemsIncludingInactive()
 
-suspend fun insertItem(item: ItemEntity): Long {
-    return itemDao.insertItem(item)
-}
+    fun searchItems(search: String) =
+        itemDao.searchItems(search)
 
-suspend fun updateItem(item: ItemEntity) {
-    itemDao.updateItem(item)
-}
+    suspend fun insertItem(item: ItemEntity): Long {
+        return itemDao.insertItem(item)
+    }
 
-suspend fun deactivateItem(itemId: Long): Boolean {
-    val affectedRows = itemDao.deactivateItem(itemId)
-    return affectedRows > 0
-}
+    suspend fun updateItem(item: ItemEntity) {
+        itemDao.updateItem(item)
+    }
 
+    suspend fun deactivateItem(itemId: Long): Boolean {
+        val affectedRows = itemDao.deactivateItem(itemId)
+        return affectedRows > 0
+    }
 }
