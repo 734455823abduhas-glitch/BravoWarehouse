@@ -1,5 +1,6 @@
 package com.bravo.warehouse.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,8 +20,12 @@ import com.bravo.warehouse.data.repository.StockMovementRepository
 import com.bravo.warehouse.data.repository.TransferRepository
 import com.bravo.warehouse.util.DateTimeUtils
 
-private val ReportNavy = Color(0xFF17365D)
-private val ReportGreen = Color(0xFF238B65)
+private val ReportNavy = Color(0xFF082F68)
+private val ReportRed = Color(0xFFE5242A)
+private val ReportBackground = Color(0xFFF3F6FC)
+private val ReportText = Color(0xFF102B50)
+private val ReportMuted = Color(0xFF526783)
+private val ReportBorder = Color(0xFFB7C8DF)
 
 @Composable
 fun ReportsScreen(
@@ -32,11 +37,9 @@ fun ReportsScreen(
 ) {
     val context = LocalContext.current
 
-    // جلب جميع الأصناف بما فيها المتوقفة
     val items by itemRepository.getAllItemsIncludingInactive()
         .collectAsState(initial = emptyList())
 
-    // جلب جميع المخازن بما فيها المتوقفة
     val warehouses by warehouseRepository.getAllWarehousesIncludingInactive()
         .collectAsState(initial = emptyList())
 
@@ -49,7 +52,6 @@ fun ReportsScreen(
     var selectedReport by remember { mutableStateOf<String?>(null) }
     var searchText by remember { mutableStateOf("") }
 
-    // null تعني عرض جميع المخازن
     var selectedWarehouseId by remember {
         mutableStateOf<Long?>(null)
     }
@@ -95,6 +97,7 @@ fun ReportsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(ReportBackground)
             .padding(16.dp)
     ) {
 
@@ -114,7 +117,11 @@ fun ReportsScreen(
                     }
                 }
             ) {
-                Text("رجوع")
+                Text(
+                    "رجوع",
+                    color = ReportRed,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Text(
@@ -125,7 +132,8 @@ fun ReportsScreen(
             )
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = ReportBorder)
+
         Spacer(modifier = Modifier.height(16.dp))
 
         if (selectedReport == null) {
@@ -133,7 +141,8 @@ fun ReportsScreen(
             Text(
                 "اختر التقرير المطلوب",
                 style = MaterialTheme.typography.titleMedium,
-                color = ReportNavy
+                color = ReportNavy,
+                fontWeight = FontWeight.Bold
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -157,8 +166,12 @@ fun ReportsScreen(
                             colors = CardDefaults.cardColors(
                                 containerColor = Color.White
                             ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                ReportBorder
+                            ),
                             elevation = CardDefaults.cardElevation(
-                                defaultElevation = 3.dp
+                                defaultElevation = 2.dp
                             )
                         ) {
                             Column(
@@ -178,7 +191,8 @@ fun ReportsScreen(
                                 Text(
                                     report.first,
                                     fontWeight = FontWeight.Bold,
-                                    color = ReportNavy
+                                    color = ReportNavy,
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -194,8 +208,12 @@ fun ReportsScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = ReportNavy
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 3.dp
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -203,10 +221,11 @@ fun ReportsScreen(
                     Text(
                         "ملخص المخزون",
                         color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         "جميع الأصناف: ${items.size}",
@@ -223,6 +242,14 @@ fun ReportsScreen(
                         color = Color.White
                     )
 
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.3f)
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
                         "جميع المخازن: ${warehouses.size}",
                         color = Color.White
@@ -238,6 +265,14 @@ fun ReportsScreen(
                         color = Color.White
                     )
 
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.3f)
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
                         "الحركات المعتمدة: ${approved.size}",
                         color = Color.White
@@ -248,7 +283,7 @@ fun ReportsScreen(
                         color = Color.White
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         "تاريخ التقرير: ${
@@ -257,14 +292,14 @@ fun ReportsScreen(
                                 System.currentTimeMillis()
                             )
                         }",
-                        color = Color.White
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
 
         } else {
 
-            // اختيار المخزن الذي سيعرض التقرير بياناته
             Text(
                 "تصفية حسب المخزن",
                 color = ReportNavy,
@@ -279,7 +314,11 @@ fun ReportsScreen(
                     onClick = {
                         warehouseMenuExpanded = true
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = ReportNavy
+                    )
                 ) {
                     Text(
                         selectedWarehouse?.let {
@@ -298,7 +337,7 @@ fun ReportsScreen(
 
                     DropdownMenuItem(
                         text = {
-                            Text("جميع المخازن")
+                            Text("جميع المخازن", color = ReportText)
                         },
                         onClick = {
                             selectedWarehouseId = null
@@ -316,7 +355,8 @@ fun ReportsScreen(
                                             " (نشط)"
                                         } else {
                                             " (متوقف)"
-                                        }
+                                        },
+                                    color = ReportText
                                 )
                             },
                             onClick = {
@@ -339,16 +379,22 @@ fun ReportsScreen(
                     Text("بحث باسم الصنف أو رقمه أو رقم المستند")
                 },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = ReportText,
+                    unfocusedTextColor = ReportText,
+                    focusedBorderColor = ReportNavy,
+                    unfocusedBorderColor = ReportBorder,
+                    focusedLabelColor = ReportNavy,
+                    unfocusedLabelColor = ReportMuted,
+                    cursorColor = ReportRed
+                )
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             when (selectedReport) {
-
-                // =========================
-                // أرصدة الأصناف
-                // =========================
 
                 "أرصدة الأصناف" -> {
 
@@ -399,7 +445,7 @@ fun ReportsScreen(
                     if (balanceRows.isEmpty()) {
                         Text(
                             "لا توجد أرصدة مطابقة.",
-                            color = ReportNavy
+                            color = ReportMuted
                         )
                     }
 
@@ -434,10 +480,6 @@ fun ReportsScreen(
                     }
                 }
 
-                // =========================
-                // تقرير التحويلات
-                // =========================
-
                 "تقرير التحويلات" -> {
 
                     val filteredTransfers = approvedTransfers.filter { transfer ->
@@ -463,7 +505,7 @@ fun ReportsScreen(
                     if (filteredTransfers.isEmpty()) {
                         Text(
                             "لا توجد تحويلات مطابقة.",
-                            color = ReportNavy
+                            color = ReportMuted
                         )
                     }
 
@@ -510,10 +552,6 @@ fun ReportsScreen(
                         }
                     }
                 }
-
-                // =========================
-                // تقارير الحركات
-                // =========================
 
                 "تقرير الوارد",
                 "تقرير المنصرف",
@@ -581,12 +619,12 @@ fun ReportsScreen(
                     ) {
                         Text(
                             "ابحث باسم الصنف أو رقمه لعرض حركته.",
-                            color = ReportNavy
+                            color = ReportMuted
                         )
                     } else if (filtered.isEmpty()) {
                         Text(
                             "لا توجد حركات مطابقة.",
-                            color = ReportNavy
+                            color = ReportMuted
                         )
                     }
 
@@ -656,21 +694,25 @@ private fun ReportCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            ReportBorder
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp
         )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp)
+            modifier = Modifier.padding(14.dp)
         ) {
             Text(
                 title,
                 fontWeight = FontWeight.Bold,
-                color = ReportGreen,
+                color = ReportNavy,
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -679,7 +721,7 @@ private fun ReportCard(
             lines.forEach { line ->
                 Text(
                     line,
-                    color = ReportNavy,
+                    color = ReportText,
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
