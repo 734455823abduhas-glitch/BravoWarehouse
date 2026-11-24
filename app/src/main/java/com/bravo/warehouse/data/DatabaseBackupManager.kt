@@ -21,7 +21,10 @@ suspend fun exportBackup(
 ) = withContext(Dispatchers.IO) {
 
     val dbFile = context.getDatabasePath(AppDatabase.DATABASE_NAME)
-    require(dbFile.exists()) { "قاعدة البيانات غير موجودة" }
+
+    require(dbFile.exists()) {
+        "قاعدة البيانات غير موجودة"
+    }
 
     try {
         val database = DatabaseProvider.getDatabase(context)
@@ -29,23 +32,29 @@ suspend fun exportBackup(
         database.openHelper.writableDatabase
             .query("PRAGMA wal_checkpoint(TRUNCATE)")
             .use { cursor ->
-                if (cursor.moveToFirst() && cursor.getInt(0) != 0) {
-                    throw Exception("تعذر حفظ بيانات قاعدة البيانات")
+                check(cursor.moveToFirst()) {
+                    "تعذر فحص قاعدة البيانات"
+                }
+
+                check(cursor.getInt(0) == 0) {
+                    "تعذر حفظ بيانات قاعدة البيانات"
                 }
             }
 
         DatabaseProvider.closeDatabase()
 
-        context.contentResolver.openOutputStream(destination, "wt").use { output ->
-            requireNotNull(output) {
-                "تعذر فتح ملف النسخة الاحتياطية"
-            }
+        context.contentResolver
+            .openOutputStream(destination, "wt").use { output ->
 
-            FileInputStream(dbFile).use { input ->
-                input.copyTo(output)
-                output.flush()
+                requireNotNull(output) {
+                    "تعذر فتح ملف النسخة الاحتياطية"
+                }
+
+                FileInputStream(dbFile).use { input ->
+                    input.copyTo(output)
+                    output.flush()
+                }
             }
-        }
 
     } finally {
         DatabaseProvider.getDatabase(context)
@@ -58,25 +67,39 @@ suspend fun importBackup(
 ) = withContext(Dispatchers.IO) {
 
     val dbFile = context.getDatabasePath(AppDatabase.DATABASE_NAME)
-    val dbDirectory = dbFile.parentFile
+
+    val directory = dbFile.parentFile
         ?: throw Exception("تعذر تحديد مجلد قاعدة البيانات")
 
-    if (!dbDirectory.exists()) {
-        check(dbDirectory.mkdirs()) {
+    if (!directory.exists()) {
+        check(directory.mkdirs()) {
             "تعذر إنشاء مجلد قاعدة البيانات"
         }
     }
 
-    val suffix = UUID.randomUUID().toString()
+    val id = UUID.randomUUID().toString()
 
-    val tempFile = File(dbDirectory, "bravo_restore_$suffix.db")
-    val rollbackFile = File(dbDirectory, "bravo_rollback_$suffix.db")
+    val tempFile = File(directory, "bravo_temp_$id.db")
+    val rollbackFile = File(directory, "bravo_old_$id.db")
+
+    val walFile = File(dbFile.path + "-wal")
+    val shmFile = File(dbFile.path + "-shm")
+
+    val rollbackWal = File(directory, "bravo_old_$id-wal")
+    val rollbackShm = File(directory, "bravo_old_$id-shm")
 
     var databaseClosed = false
-    var oldDatabaseMoved = false
+    var swapStarted = false
+
+    var oldDbMoved = false
+    var oldWalMoved = false
+    var oldShmMoved = false
 
     try {
+
+        // قراءة النسخة إلى ملف مؤقت.
         context.contentResolver.openInputStream(source).use { input ->
+
             requireNotNull(input) {
                 "تعذر قراءة ملف النسخة الاحتياطية"
             }
@@ -88,67 +111,105 @@ suspend fun importBackup(
             }
         }
 
+        // التحقق من سلامة النسخة ومخطط Room.
         validateBackup(context, tempFile)
 
+        // إغلاق قاعدة البيانات الحالية.
         DatabaseProvider.closeDatabase()
         databaseClosed = true
 
-        val walFile = File(dbFile.path + "-wal")
-        val shmFile = File(dbFile.path + "-shm")
+        swapStarted = true
 
-        walFile.delete()
-        shmFile.delete()
-
+        // حفظ قاعدة البيانات القديمة وملفاتها الجانبية.
         if (dbFile.exists()) {
             check(dbFile.renameTo(rollbackFile)) {
                 "تعذر حفظ قاعدة البيانات الحالية"
             }
-            oldDatabaseMoved = true
+            oldDbMoved = true
         }
 
+        if (walFile.exists()) {
+            check(walFile.renameTo(rollbackWal)) {
+                "تعذر حفظ ملف WAL القديم"
+            }
+            oldWalMoved = true
+        }
+
+        if (shmFile.exists()) {
+            check(shmFile.renameTo(rollbackShm)) {
+                "تعذر حفظ ملف SHM القديم"
+            }
+            oldShmMoved = true
+        }
+
+        // تثبيت النسخة الجديدة.
         check(tempFile.renameTo(dbFile)) {
             "تعذر تثبيت النسخة الاحتياطية"
         }
 
-        // فتح قاعدة البيانات الجديدة للتأكد من سلامتها.
-        DatabaseProvider.getDatabase(context)
+        // فتح قاعدة البيانات الجديدة واختبارها.
+        val restoredDatabase = DatabaseProvider.getDatabase(context)
+
+        restoredDatabase.openHelper.writableDatabase
+
         databaseClosed = false
 
+        // لا نحذف القديمة إلا بعد نجاح فتح الجديدة.
         rollbackFile.delete()
+        rollbackWal.delete()
+        rollbackShm.delete()
 
     } catch (e: Exception) {
 
-        try {
-            if (databaseClosed || oldDatabaseMoved) {
+        // محاولة استعادة قاعدة البيانات القديمة.
+        if (databaseClosed || swapStarted) {
+
+            try {
                 DatabaseProvider.closeDatabase()
-            }
 
-            if (oldDatabaseMoved && rollbackFile.exists()) {
                 dbFile.delete()
-                File(dbFile.path + "-wal").delete()
-                File(dbFile.path + "-shm").delete()
+                walFile.delete()
+                shmFile.delete()
 
-                check(rollbackFile.renameTo(dbFile)) {
-                    "تعذرت استعادة قاعدة البيانات السابقة"
+                if (oldDbMoved) {
+                    check(rollbackFile.renameTo(dbFile)) {
+                        "تعذرت استعادة قاعدة البيانات القديمة"
+                    }
                 }
+
+                if (oldWalMoved) {
+                    check(rollbackWal.renameTo(walFile)) {
+                        "تعذرت استعادة ملف WAL القديم"
+                    }
+                }
+
+                if (oldShmMoved) {
+                    check(rollbackShm.renameTo(shmFile)) {
+                        "تعذرت استعادة ملف SHM القديم"
+                    }
+                }
+
+                if (dbFile.exists()) {
+                    DatabaseProvider.getDatabase(context)
+                        .openHelper.writableDatabase
+                }
+
+                databaseClosed = false
+
+            } catch (restoreError: Exception) {
+                e.addSuppressed(restoreError)
             }
-
-            DatabaseProvider.getDatabase(context)
-            databaseClosed = false
-
-        } catch (restoreError: Exception) {
-            e.addSuppressed(restoreError)
         }
 
         throw e
 
     } finally {
-        tempFile.delete()
 
+        tempFile.delete()
         File(tempFile.path + "-wal").delete()
         File(tempFile.path + "-shm").delete()
 
-        if (databaseClosed) {
+        if (databaseClosed && dbFile.exists()) {
             DatabaseProvider.getDatabase(context)
         }
     }
@@ -158,6 +219,7 @@ private fun validateBackup(
     context: Context,
     file: File
 ) {
+
     require(file.exists() && file.length() > 0) {
         "ملف النسخة فارغ أو غير صالح"
     }
@@ -169,8 +231,16 @@ private fun validateBackup(
     )
 
     try {
-        sqlite.rawQuery("PRAGMA integrity_check", null).use { cursor ->
-            require(cursor.moveToFirst() && cursor.getString(0) == "ok") {
+
+        sqlite.rawQuery(
+            "PRAGMA integrity_check",
+            null
+        ).use { cursor ->
+
+            require(
+                cursor.moveToFirst() &&
+                cursor.getString(0) == "ok"
+            ) {
                 "قاعدة البيانات تالفة"
             }
         }
@@ -193,6 +263,7 @@ private fun validateBackup(
             "SELECT name FROM sqlite_master WHERE type='table'",
             null
         ).use { cursor ->
+
             while (cursor.moveToNext()) {
                 existingTables.add(cursor.getString(0))
             }
@@ -206,7 +277,8 @@ private fun validateBackup(
         sqlite.close()
     }
 
-    // اختبار مخطط Room باستخدام اسم الملف داخل مجلد قواعد بيانات التطبيق.
+    // اختبار ملف النسخة نفسه باستخدام Room.
+    // الملف موجود في مجلد قواعد بيانات التطبيق.
     val testDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
