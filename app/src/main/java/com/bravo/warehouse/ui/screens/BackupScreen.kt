@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun BackupScreen(
-onBack: () -> Unit
+onBack: () -> Unit,
+onRestoreComplete: () -> Unit
 ) {
 val context = LocalContext.current
 val scope = rememberCoroutineScope()
@@ -54,7 +55,8 @@ val restoreLauncher = rememberLauncherForActivityResult(
             message = ""
             try {
                 DatabaseBackupManager.importBackup(context, uri)
-                message = "تمت استعادة النسخة الاحتياطية بنجاح"
+                message = "تمت الاستعادة بنجاح، جارٍ تحديث التطبيق"
+                onRestoreComplete()
             } catch (e: Exception) {
                 message = "فشلت الاستعادة: ${e.message}"
             } finally {
