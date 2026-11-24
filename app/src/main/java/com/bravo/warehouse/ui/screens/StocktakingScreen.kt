@@ -303,10 +303,12 @@ Column(
                 return@Button
             }
 
-            scope.launch {
-                isSaving = true
-                message = ""
+            if (isSaving) return@Button
 
+            isSaving = true
+            message = ""
+
+            scope.launch {
                 try {
                     val currentSystemBalance =
                         movementRepository.getCurrentBalance(
@@ -343,38 +345,37 @@ Column(
                             isApproved = false
                         )
 
-                        val movementId =
-                            movementRepository.insertMovement(movement)
+                        movementRepository.insertAndApproveMovement(
+                            movement
+                        )
 
-                        val approved =
-                            movementRepository.approveMovement(movementId)
+                        systemBalance =
+                            movementRepository.getCurrentBalance(
+                                selectedItemId!!,
+                                selectedWarehouseId!!
+                            )
 
-                        if (approved) {
-                            systemBalance =
-                                movementRepository.getCurrentBalance(
-                                    selectedItemId!!,
-                                    selectedWarehouseId!!
-                                )
+                        actualQuantity = ""
 
-                            actualQuantity = ""
-
-                            message =
-                                if (actualDifference > 0) {
-                                    "تم اعتماد الجرد وتسوية الزيادة بنجاح"
-                                } else {
-                                    "تم اعتماد الجرد وتسوية العجز بنجاح"
-                                }
-                        } else {
-                            message =
-                                "تعذر اعتماد التسوية. تحقق من رصيد المخزن"
-                        }
+                        message =
+                            if (actualDifference > 0) {
+                                "تم اعتماد الجرد وتسوية الزيادة بنجاح"
+                            } else {
+                                "تم اعتماد الجرد وتسوية العجز بنجاح"
+                            }
                     }
 
                 } catch (e: Exception) {
-                    message = "حدث خطأ أثناء تنفيذ الجرد"
-                }
+                    message = when {
+                        e.message?.contains("Insufficient stock") == true ->
+                            "الرصيد غير كافٍ لتنفيذ تسوية العجز"
 
-                isSaving = false
+                        else ->
+                            "حدث خطأ أثناء تنفيذ الجرد: ${e.message ?: "خطأ غير معروف"}"
+                    }
+                } finally {
+                    isSaving = false
+                }
             }
         },
         modifier = Modifier.fillMaxWidth(),
