@@ -280,6 +280,23 @@ object ReportExportUtils {
         return file
     }
 
+    fun previewPdf(context: Context, file: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        context.startActivity(
+            Intent.createChooser(intent, "معاينة التقرير")
+        )
+    }
+
     fun shareFile(context: Context, file: File) {
 
         val uri = FileProvider.getUriForFile(
