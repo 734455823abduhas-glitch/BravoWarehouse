@@ -1,5 +1,6 @@
 package com.bravo.warehouse.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +21,6 @@ private val BravoBackground = Color(0xFFF3F6FC)
 private val BravoText = Color(0xFF102B50)
 private val BravoMuted = Color(0xFF526783)
 private val BravoBorder = Color(0xFFB7C8DF)
-private val BravoLightBlue = Color(0xFFE8EFF9)
 
 @Composable
 fun ItemsScreen(
@@ -56,7 +56,6 @@ fun ItemsScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -78,7 +77,7 @@ fun ItemsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = search,
@@ -112,7 +111,7 @@ fun ItemsScreen(
                     contentColor = Color.White
                 )
             ) {
-                Text("＋  إضافة صنف جديد")
+                Text("＋ إضافة صنف جديد")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -138,10 +137,11 @@ fun ItemsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (search.isBlank())
+                        text = if (search.isBlank()) {
                             "لا توجد أصناف مسجلة"
-                        else
-                            "لا توجد نتائج مطابقة للبحث",
+                        } else {
+                            "لا توجد نتائج مطابقة للبحث"
+                        },
                         color = BravoMuted
                     )
                 }
@@ -206,7 +206,7 @@ fun ItemsScreen(
                                     if (success) {
                                         "تم تعطيل الصنف بنجاح"
                                     } else {
-                                        "لا يمكن تعطيل الصنف لأنه يحتوي على رصيد"
+                                        "تعذر تعطيل الصنف"
                                     }
                                 )
                             } catch (e: Exception) {
@@ -247,8 +247,7 @@ private fun ItemCard(
     onDeactivate: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -279,12 +278,9 @@ private fun ItemCard(
                 onClick = onDeactivate,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, BravoRed),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = BravoRed
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    BravoRed
                 )
             ) {
                 Text("تعطيل الصنف")
@@ -316,23 +312,12 @@ private fun AddItemDialog(
                 modifier = Modifier.heightIn(max = 450.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                @Composable
-                fun inputColors() = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = BravoNavy,
-                    unfocusedBorderColor = BravoBorder,
-                    focusedLabelColor = BravoNavy,
-                    unfocusedLabelColor = BravoMuted,
-                    focusedTextColor = BravoText,
-                    unfocusedTextColor = BravoText,
-                    cursorColor = BravoRed
-                )
-
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
                     label = { Text("كود الصنف") },
                     singleLine = true,
-                    colors = inputColors()
+                    colors = itemFieldColors()
                 )
 
                 OutlinedTextField(
@@ -340,7 +325,7 @@ private fun AddItemDialog(
                     onValueChange = { name = it },
                     label = { Text("اسم الصنف") },
                     singleLine = true,
-                    colors = inputColors()
+                    colors = itemFieldColors()
                 )
 
                 OutlinedTextField(
@@ -348,7 +333,7 @@ private fun AddItemDialog(
                     onValueChange = { category = it },
                     label = { Text("الفئة") },
                     singleLine = true,
-                    colors = inputColors()
+                    colors = itemFieldColors()
                 )
 
                 OutlinedTextField(
@@ -356,10 +341,78 @@ private fun AddItemDialog(
                     onValueChange = { unit = it },
                     label = { Text("وحدة القياس") },
                     singleLine = true,
-                    colors = inputColors()
+                    colors = itemFieldColors()
                 )
 
                 OutlinedTextField(
                     value = minimum,
                     onValueChange = { minimum = it },
-                    label = { Text("ال
+                    label = { Text("الحد الأدنى للمخزون") },
+                    singleLine = true,
+                    colors = itemFieldColors()
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("الوصف") },
+                    colors = itemFieldColors()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val minimumValue = minimum.toDoubleOrNull()
+
+                    if (
+                        code.isNotBlank() &&
+                        name.isNotBlank() &&
+                        minimumValue != null &&
+                        minimumValue.isFinite() &&
+                        minimumValue >= 0
+                    ) {
+                        onSave(
+                            ItemEntity(
+                                itemCode = code.trim(),
+                                itemName = name.trim(),
+                                category = category.trim(),
+                                unit = unit.trim(),
+                                minimumStock = minimumValue,
+                                description = description.trim()
+                            )
+                        )
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BravoNavy,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("حفظ")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = BravoRed
+                )
+            ) {
+                Text("إلغاء")
+            }
+        }
+    )
+}
+
+@Composable
+private fun itemFieldColors() =
+    OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = BravoNavy,
+        unfocusedBorderColor = BravoBorder,
+        focusedLabelColor = BravoNavy,
+        unfocusedLabelColor = BravoMuted,
+        focusedTextColor = BravoText,
+        unfocusedTextColor = BravoText,
+        cursorColor = BravoRed
+    )
