@@ -25,31 +25,69 @@ interface StockMovementDao {
     @Insert
     suspend fun insertMovement(movement: StockMovementEntity): Long
 
-    @Query(
-        "UPDATE stock_movements SET isApproved = 1 WHERE id = :movementId AND isApproved = 0"
-    )
+    @Query("""
+        UPDATE stock_movements
+        SET isApproved = 1
+        WHERE id = :movementId AND isApproved = 0
+    """)
     suspend fun approveMovement(movementId: Long): Int
 
-    @Query(
-        "SELECT COALESCE(SUM(quantity), 0) FROM stock_movements WHERE itemId = :itemId AND warehouseId = :warehouseId AND isApproved = 1 AND movementType = 'IN'"
-    )
-    suspend fun getTotalIncoming(itemId: Long, warehouseId: Long): Double
+    @Query("""
+        SELECT COALESCE(SUM(quantity), 0)
+        FROM stock_movements
+        WHERE itemId = :itemId
+        AND warehouseId = :warehouseId
+        AND isApproved = 1
+        AND movementType IN ('IN', 'RETURN_IN', 'ADJUSTMENT_IN')
+    """)
+    suspend fun getTotalIncoming(
+        itemId: Long,
+        warehouseId: Long
+    ): Double
 
-    @Query(
-        "SELECT COALESCE(SUM(quantity), 0) FROM stock_movements WHERE itemId = :itemId AND warehouseId = :warehouseId AND isApproved = 1 AND movementType = 'OUT'"
-    )
-    suspend fun getTotalOutgoing(itemId: Long, warehouseId: Long): Double
+    @Query("""
+        SELECT COALESCE(SUM(quantity), 0)
+        FROM stock_movements
+        WHERE itemId = :itemId
+        AND warehouseId = :warehouseId
+        AND isApproved = 1
+        AND movementType IN ('OUT', 'RETURN_OUT', 'ADJUSTMENT_OUT')
+    """)
+    suspend fun getTotalOutgoing(
+        itemId: Long,
+        warehouseId: Long
+    ): Double
 
     @Transaction
-    suspend fun approveMovementSafely(movementId: Long): Boolean {
+    suspend fun approveMovementSafely(
+        movementId: Long
+    ): Boolean {
 
-        val movement = getMovementById(movementId) ?: return false
+        val movement = getMovementById(movementId)
+            ?: return false
 
         if (movement.isApproved) return false
 
-        if (movement.quantity <= 0) return false
+        if (!movement.quantity.isFinite() || movement.quantity <= 0)
+            return false
 
-        if (movement.movementType == "OUT") {
+        val incomingTypes = listOf(
+            "IN",
+            "RETURN_IN",
+            "ADJUSTMENT_IN"
+        )
+
+        val outgoingTypes = listOf(
+            "OUT",
+            "RETURN_OUT",
+            "ADJUSTMENT_OUT"
+        )
+
+        if (movement.movementType !in incomingTypes &&
+            movement.movementType !in outgoingTypes
+        ) return false
+
+        if (movement.movementType in outgoingTypes) {
 
             val incoming = getTotalIncoming(
                 movement.itemId,
@@ -63,7 +101,8 @@ interface StockMovementDao {
 
             val balance = incoming - outgoing
 
-            if (movement.quantity > balance) return false
+            if (movement.quantity > balance)
+                return false
         }
 
         return approveMovement(movementId) > 0
