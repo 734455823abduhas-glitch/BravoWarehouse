@@ -113,34 +113,38 @@ suspend fun createTransfer(
             )
         )
 
-        movementDao.insertMovement(
-            StockMovementEntity(
-                documentNumber = cleanNumber,
-                movementType = "OUT",
-                itemId = itemId,
-                warehouseId = sourceWarehouseId,
-                quantity = quantity,
-                notes = "تحويل إلى المخزن رقم $destinationWarehouseId. $cleanNotes",
-                movementDate = now,
-                createdAt = now,
-                createdBy = createdBy,
-                isApproved = true
-            )
+        val outgoingMovement = StockMovementEntity(
+            documentNumber = cleanNumber,
+            movementType = "OUT",
+            itemId = itemId,
+            warehouseId = sourceWarehouseId,
+            quantity = quantity,
+            notes = "تحويل إلى المخزن رقم $destinationWarehouseId. $cleanNotes",
+            movementDate = now,
+            createdAt = now,
+            createdBy = createdBy,
+            isApproved = false
         )
 
-        movementDao.insertMovement(
-            StockMovementEntity(
-                documentNumber = cleanNumber,
-                movementType = "IN",
-                itemId = itemId,
-                warehouseId = destinationWarehouseId,
-                quantity = quantity,
-                notes = "تحويل من المخزن رقم $sourceWarehouseId. $cleanNotes",
-                movementDate = now,
-                createdAt = now,
-                createdBy = createdBy,
-                isApproved = true
-            )
+        movementDao.insertAndApproveMovementSafely(
+            outgoingMovement
+        )
+
+        val incomingMovement = StockMovementEntity(
+            documentNumber = cleanNumber,
+            movementType = "IN",
+            itemId = itemId,
+            warehouseId = destinationWarehouseId,
+            quantity = quantity,
+            notes = "تحويل من المخزن رقم $sourceWarehouseId. $cleanNotes",
+            movementDate = now,
+            createdAt = now,
+            createdBy = createdBy,
+            isApproved = false
+        )
+
+        movementDao.insertAndApproveMovementSafely(
+            incomingMovement
         )
 
         transferId
