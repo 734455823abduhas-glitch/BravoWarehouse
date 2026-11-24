@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bravo.warehouse.data.entity.ItemEntity
@@ -44,24 +45,34 @@ fun TransferScreen(
             style = MaterialTheme.typography.headlineSmall
         )
 
+        // اختيار الصنف
         Box {
             OutlinedTextField(
-                value = selectedItem?.itemName ?: "",
+                value = selectedItem?.let {
+                    "${it.itemCode} - ${it.itemName}"
+                } ?: "",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("اختر الصنف") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .matchParentSize()
                     .clickable { itemMenu = true }
             )
 
             DropdownMenu(
                 expanded = itemMenu,
-                onDismissRequest = { itemMenu = false }
+                onDismissRequest = { itemMenu = false },
+                modifier = Modifier.heightIn(max = 300.dp)
             ) {
-                items.forEach { item ->
+                items.filter { it.isActive }.forEach { item ->
                     DropdownMenuItem(
-                        text = { Text(item.itemName) },
+                        text = {
+                            Text("${item.itemCode} - ${item.itemName}")
+                        },
                         onClick = {
                             selectedItem = item
                             itemMenu = false
@@ -71,29 +82,37 @@ fun TransferScreen(
             }
         }
 
+        // المخزن المصدر
         Box {
             OutlinedTextField(
                 value = source?.warehouseName ?: "",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("المخزن المصدر") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .matchParentSize()
                     .clickable { sourceMenu = true }
             )
 
             DropdownMenu(
                 expanded = sourceMenu,
-                onDismissRequest = { sourceMenu = false }
+                onDismissRequest = { sourceMenu = false },
+                modifier = Modifier.heightIn(max = 300.dp)
             ) {
                 warehouses.forEach { warehouse ->
                     DropdownMenuItem(
                         text = { Text(warehouse.warehouseName) },
                         onClick = {
                             source = warehouse
+
                             if (destination?.id == warehouse.id) {
                                 destination = null
                             }
+
                             sourceMenu = false
                         }
                     )
@@ -101,20 +120,26 @@ fun TransferScreen(
             }
         }
 
+        // المخزن المستلم
         Box {
             OutlinedTextField(
                 value = destination?.warehouseName ?: "",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("المخزن المستلم") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .matchParentSize()
                     .clickable { destinationMenu = true }
             )
 
             DropdownMenu(
                 expanded = destinationMenu,
-                onDismissRequest = { destinationMenu = false }
+                onDismissRequest = { destinationMenu = false },
+                modifier = Modifier.heightIn(max = 300.dp)
             ) {
                 warehouses
                     .filter { it.id != source?.id }
@@ -130,13 +155,16 @@ fun TransferScreen(
             }
         }
 
+        // الكمية
         OutlinedTextField(
             value = quantity,
             onValueChange = { quantity = it },
             label = { Text("الكمية") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
+        // الملاحظات
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
@@ -144,6 +172,7 @@ fun TransferScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        // تنفيذ التحويل
         Button(
             onClick = {
                 val item = selectedItem
@@ -151,15 +180,23 @@ fun TransferScreen(
                 val to = destination
                 val amount = quantity.toDoubleOrNull()
 
-                if (
-                    item == null ||
-                    from == null ||
-                    to == null ||
-                    amount == null ||
-                    amount <= 0 ||
-                    from.id == to.id
-                ) {
-                    message = "يرجى التأكد من جميع البيانات والكمية"
+                if (item == null) {
+                    message = "يرجى اختيار الصنف"
+                    return@Button
+                }
+
+                if (from == null || to == null) {
+                    message = "يرجى اختيار المخزن المصدر والمستلم"
+                    return@Button
+                }
+
+                if (from.id == to.id) {
+                    message = "لا يمكن التحويل إلى نفس المخزن"
+                    return@Button
+                }
+
+                if (amount == null || !amount.isFinite() || amount <= 0) {
+                    message = "يرجى إدخال كمية صحيحة"
                     return@Button
                 }
 
@@ -174,7 +211,7 @@ fun TransferScreen(
                             sourceWarehouseId = from.id,
                             destinationWarehouseId = to.id,
                             quantity = amount,
-                            notes = notes
+                            notes = notes.trim()
                         )
 
                         message = "تم التحويل بنجاح"
@@ -197,7 +234,8 @@ fun TransferScreen(
         ) {
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(22.dp),
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             } else {
                 Text("تنفيذ التحويل")
