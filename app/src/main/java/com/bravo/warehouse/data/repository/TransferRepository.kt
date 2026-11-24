@@ -22,7 +22,10 @@ suspend fun createTransfer(
     createdBy: String = ""
 ): Long {
 
-    require(transferNumber.isNotBlank()) {
+    val cleanNumber = transferNumber.trim()
+    val cleanNotes = notes.trim()
+
+    require(cleanNumber.isNotBlank()) {
         "Transfer number is required"
     }
 
@@ -50,6 +53,7 @@ suspend fun createTransfer(
         val warehouseDao = database.warehouseDao()
 
         val item = itemDao.getItemById(itemId)
+
         check(item != null && item.isActive) {
             "Item does not exist or is inactive"
         }
@@ -72,9 +76,7 @@ suspend fun createTransfer(
         }
 
         check(
-            transferDao.countByTransferNumber(
-                transferNumber.trim()
-            ) == 0
+            transferDao.countByTransferNumber(cleanNumber) == 0
         ) {
             "Transfer number already exists"
         }
@@ -91,13 +93,11 @@ suspend fun createTransfer(
 
         val balance = incoming - outgoing
 
-        check(quantity <= balance) {
+        check(quantity <= balance + 0.000001) {
             "Insufficient stock in source warehouse"
         }
 
         val now = System.currentTimeMillis()
-        val cleanNumber = transferNumber.trim()
-        val cleanNotes = notes.trim()
 
         val transferId = transferDao.insertTransfer(
             TransferEntity(
@@ -120,7 +120,7 @@ suspend fun createTransfer(
                 itemId = itemId,
                 warehouseId = sourceWarehouseId,
                 quantity = quantity,
-                notes = "Transfer to warehouse $destinationWarehouseId. $cleanNotes",
+                notes = "تحويل إلى المخزن رقم $destinationWarehouseId. $cleanNotes",
                 movementDate = now,
                 createdAt = now,
                 createdBy = createdBy,
@@ -135,7 +135,7 @@ suspend fun createTransfer(
                 itemId = itemId,
                 warehouseId = destinationWarehouseId,
                 quantity = quantity,
-                notes = "Transfer from warehouse $sourceWarehouseId. $cleanNotes",
+                notes = "تحويل من المخزن رقم $sourceWarehouseId. $cleanNotes",
                 movementDate = now,
                 createdAt = now,
                 createdBy = createdBy,
