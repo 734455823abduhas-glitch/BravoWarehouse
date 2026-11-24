@@ -88,7 +88,6 @@ fun ReportsScreen(
         "كشف حركة صنف" to "🔎"
     )
 
-    // تجهيز بيانات التقرير حسب التقرير المحدد والفلاتر الحالية
     val exportHeaders = when (selectedReport) {
         "أرصدة الأصناف" -> listOf(
             "رمز الصنف",
@@ -573,11 +572,57 @@ fun ReportsScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // أزرار تصدير التقرير الحالي
+            // أزرار معاينة وتصدير التقرير الحالي
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "لا توجد بيانات لمعاينتها",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createPdf(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+
+                                ReportExportUtils.previewPdf(context, file)
+
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "تعذرت معاينة PDF: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 10.dp
+                    ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportNavy
+                    )
+                ) {
+                    Text(
+                        "معاينة PDF",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
 
                 Button(
                     onClick = {
@@ -595,7 +640,9 @@ fun ReportsScreen(
                                     exportHeaders,
                                     exportRows
                                 )
+
                                 ReportExportUtils.shareFile(context, file)
+
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     context,
@@ -607,11 +654,19 @@ fun ReportsScreen(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 10.dp
+                    ),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = ReportNavy
+                        containerColor = ReportRed
                     )
                 ) {
-                    Text("تصدير PDF", color = Color.White)
+                    Text(
+                        "تصدير PDF",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
 
                 Button(
@@ -630,7 +685,9 @@ fun ReportsScreen(
                                     exportHeaders,
                                     exportRows
                                 )
+
                                 ReportExportUtils.shareFile(context, file)
+
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     context,
@@ -642,11 +699,19 @@ fun ReportsScreen(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 10.dp
+                    ),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = ReportRed
+                        containerColor = ReportNavy
                     )
                 ) {
-                    Text("تصدير Excel", color = Color.White)
+                    Text(
+                        "تصدير Excel",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
 
