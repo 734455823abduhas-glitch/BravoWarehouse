@@ -1,5 +1,7 @@
 package com.bravo.warehouse.ui.screens
 
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +21,7 @@ import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.data.repository.StockMovementRepository
 import com.bravo.warehouse.data.repository.TransferRepository
 import com.bravo.warehouse.util.DateTimeUtils
+import com.bravo.warehouse.util.ReportExportUtils
 
 private val ReportNavy = Color(0xFF082F68)
 private val ReportRed = Color(0xFFE5242A)
@@ -72,17 +75,8 @@ fun ReportsScreen(
         it.id == selectedWarehouseId
     }
 
-    val incomingTypes = listOf(
-        "IN",
-        "RETURN_IN",
-        "ADJUSTMENT_IN"
-    )
-
-    val outgoingTypes = listOf(
-        "OUT",
-        "RETURN_OUT",
-        "ADJUSTMENT_OUT"
-    )
+    val incomingTypes = listOf("IN", "RETURN_IN", "ADJUSTMENT_IN")
+    val outgoingTypes = listOf("OUT", "RETURN_OUT", "ADJUSTMENT_OUT")
 
     val reportButtons = listOf(
         "أرصدة الأصناف" to "📦",
@@ -93,6 +87,216 @@ fun ReportsScreen(
         "تقرير الجرد" to "📋",
         "كشف حركة صنف" to "🔎"
     )
+
+    // تجهيز بيانات التقرير حسب التقرير المحدد والفلاتر الحالية
+    val exportHeaders = when (selectedReport) {
+        "أرصدة الأصناف" -> listOf(
+            "رمز الصنف",
+            "اسم الصنف",
+            "المخزن",
+            "الوارد",
+            "المنصرف",
+            "الرصيد",
+            "الوحدة",
+            "حالة الصنف"
+        )
+
+        "تقرير التحويلات" -> listOf(
+            "رقم التحويل",
+            "الصنف",
+            "رمز الصنف",
+            "من المخزن",
+            "إلى المخزن",
+            "الكمية",
+            "الوحدة",
+            "التاريخ",
+            "الملاحظات"
+        )
+
+        else -> listOf(
+            "الصنف",
+            "رمز الصنف",
+            "رقم المستند",
+            "نوع الحركة",
+            "المخزن",
+            "الكمية",
+            "الوحدة",
+            "التاريخ",
+            "الملاحظات"
+        )
+    }
+
+    val exportRows: List<List<String>> = when (selectedReport) {
+
+        "أرصدة الأصناف" -> {
+            items.filter { item ->
+                searchText.isBlank() ||
+                    item.itemName.contains(searchText, true) ||
+                    item.itemCode.contains(searchText, true)
+            }.flatMap { item ->
+                warehouses.filter { warehouse ->
+                    selectedWarehouseId == null ||
+                        warehouse.id == selectedWarehouseId
+                }.map { warehouse ->
+
+                    val itemMovements = approved.filter {
+                        it.itemId == item.id &&
+                            it.warehouseId == warehouse.id
+                    }
+
+                    val incoming = itemMovements
+                        .filter { it.movementType in incomingTypes }
+                        .sumOf { it.quantity }
+
+                    val outgoing = itemMovements
+                        .filter { it.movementType in outgoingTypes }
+                        .sumOf { it.quantity }
+
+                    listOf(
+                        item.itemCode,
+                        item.itemName,
+                        warehouse.warehouseName,
+                        incoming.toString(),
+                        outgoing.toString(),
+                        (incoming - outgoing).toString(),
+                        item.unit,
+                        if (item.isActive) "نشط" else "متوقف"
+                    )
+                }
+            }
+        }
+
+        "تقرير التحويلات" -> {
+            approvedTransfers.filter { transfer ->
+                val item = items.firstOrNull {
+                    it.id == transfer.itemId
+                }
+
+                val matchesWarehouse =
+                    selectedWarehouseId == null ||
+                        transfer.sourceWarehouseId == selectedWarehouseId ||
+                        transfer.destinationWarehouseId == selectedWarehouseId
+
+                val matchesSearch =
+                    searchText.isBlank() ||
+                        transfer.transferNumber.contains(searchText, true) ||
+                        (item?.itemName?.contains(searchText, true) == true) ||
+                        (item?.itemCode?.contains(searchText, true) == true)
+
+                matchesWarehouse && matchesSearch
+            }.map { transfer ->
+                val item = items.firstOrNull {
+                    it.id == transfer.itemId
+                }
+
+                val source = warehouses.firstOrNull {
+                    it.id == transfer.sourceWarehouseId
+                }
+
+                val destination = warehouses.firstOrNull {
+                    it.id == transfer.destinationWarehouseId
+                }
+
+                listOf(
+                    transfer.transferNumber,
+                    item?.itemName ?: "غير معروف",
+                    item?.itemCode ?: "",
+                    source?.warehouseName ?: "غير معروف",
+                    destination?.warehouseName ?: "غير معروف",
+                    transfer.quantity.toString(),
+                    item?.unit ?: "",
+                    DateTimeUtils.formatDateTime(context, transfer.transferDate),
+                    transfer.notes
+                )
+            }
+        }
+
+        "تقرير الوارد",
+        "تقرير المنصرف",
+        "تقرير المرتجعات",
+        "تقرير الجرد",
+        "كشف حركة صنف" -> {
+            approved.filter { movement ->
+                val item = items.firstOrNull {
+                    it.id == movement.itemId
+                }
+
+                val matchesWarehouse =
+                    selectedWarehouseId == null ||
+                        movement.warehouseId == selectedWarehouseId
+
+                val matchesSearch =
+                    searchText.isBlank() ||
+                        (item?.itemName?.contains(searchText, true) == true) ||
+                        (item?.itemCode?.contains(searchText, true) == true) ||
+                        movement.documentNumber.contains(searchText, true)
+
+                val matchesReport = when (selectedReport) {
+                    "تقرير الوارد" -> movement.movementType == "IN"
+                    "تقرير المنصرف" -> movement.movementType == "OUT"
+
+                    "تقرير المرتجعات" ->
+                        movement.movementType in listOf(
+                            "RETURN_IN",
+                            "RETURN_OUT"
+                        )
+
+                    "تقرير الجرد" ->
+                        movement.movementType in listOf(
+                            "ADJUSTMENT_IN",
+                            "ADJUSTMENT_OUT"
+                        )
+
+                    "كشف حركة صنف" -> true
+                    else -> false
+                }
+
+                val hasSearchForItem =
+                    selectedReport != "كشف حركة صنف" ||
+                        searchText.isNotBlank()
+
+                matchesWarehouse &&
+                    matchesSearch &&
+                    matchesReport &&
+                    hasSearchForItem
+            }.map { movement ->
+                val item = items.firstOrNull {
+                    it.id == movement.itemId
+                }
+
+                val warehouse = warehouses.firstOrNull {
+                    it.id == movement.warehouseId
+                }
+
+                val typeName = when (movement.movementType) {
+                    "IN" -> "وارد"
+                    "OUT" -> "منصرف"
+                    "RETURN_IN" -> "مرتجع للمخزن"
+                    "RETURN_OUT" -> "مرتجع من المخزن"
+                    "ADJUSTMENT_IN" -> "زيادة جرد"
+                    "ADJUSTMENT_OUT" -> "عجز جرد"
+                    else -> movement.movementType
+                }
+
+                listOf(
+                    item?.itemName ?: "غير معروف",
+                    item?.itemCode ?: "",
+                    movement.documentNumber,
+                    typeName,
+                    warehouse?.warehouseName ?: "غير معروف",
+                    movement.quantity.toString(),
+                    item?.unit ?: "",
+                    DateTimeUtils.formatDateTime(
+                        context,
+                        movement.movementDate
+                    ),
+                    movement.notes
+                )
+            }
+        }
+
+        else -> emptyList()
+    }
 
     Column(
         modifier = Modifier
@@ -166,10 +370,7 @@ fun ReportsScreen(
                             colors = CardDefaults.cardColors(
                                 containerColor = Color.White
                             ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                ReportBorder
-                            ),
+                            border = BorderStroke(1.dp, ReportBorder),
                             elevation = CardDefaults.cardElevation(
                                 defaultElevation = 2.dp
                             )
@@ -227,57 +428,35 @@ fun ReportsScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        "جميع الأصناف: ${items.size}",
-                        color = Color.White
-                    )
-
+                    Text("جميع الأصناف: ${items.size}", color = Color.White)
                     Text(
                         "الأصناف النشطة: ${items.count { it.isActive }}",
                         color = Color.White
                     )
-
                     Text(
                         "الأصناف المتوقفة: ${items.count { !it.isActive }}",
                         color = Color.White
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
-
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.3f)
-                    )
-
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    Text(
-                        "جميع المخازن: ${warehouses.size}",
-                        color = Color.White
-                    )
-
+                    Text("جميع المخازن: ${warehouses.size}", color = Color.White)
                     Text(
                         "المخازن النشطة: ${warehouses.count { it.isActive }}",
                         color = Color.White
                     )
-
                     Text(
                         "المخازن المتوقفة: ${warehouses.count { !it.isActive }}",
                         color = Color.White
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
-
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.3f)
-                    )
-
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    Text(
-                        "الحركات المعتمدة: ${approved.size}",
-                        color = Color.White
-                    )
-
+                    Text("الحركات المعتمدة: ${approved.size}", color = Color.White)
                     Text(
                         "التحويلات المعتمدة: ${approvedTransfers.size}",
                         color = Color.White
@@ -392,6 +571,85 @@ fun ReportsScreen(
                 )
             )
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // أزرار تصدير التقرير الحالي
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "لا توجد بيانات لتصديرها",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createPdf(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+                                ReportExportUtils.shareFile(context, file)
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "تعذر إنشاء PDF: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportNavy
+                    )
+                ) {
+                    Text("تصدير PDF", color = Color.White)
+                }
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "لا توجد بيانات لتصديرها",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createExcel(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+                                ReportExportUtils.shareFile(context, file)
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "تعذر إنشاء Excel: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportRed
+                    )
+                ) {
+                    Text("تصدير Excel", color = Color.White)
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             when (selectedReport) {
@@ -443,16 +701,12 @@ fun ReportsScreen(
                     }
 
                     if (balanceRows.isEmpty()) {
-                        Text(
-                            "لا توجد أرصدة مطابقة.",
-                            color = ReportMuted
-                        )
+                        Text("لا توجد أرصدة مطابقة.", color = ReportMuted)
                     }
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-
                         lazyItems(balanceRows) { row ->
 
                             val item = row.first
@@ -503,16 +757,12 @@ fun ReportsScreen(
                     }
 
                     if (filteredTransfers.isEmpty()) {
-                        Text(
-                            "لا توجد تحويلات مطابقة.",
-                            color = ReportMuted
-                        )
+                        Text("لا توجد تحويلات مطابقة.", color = ReportMuted)
                     }
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-
                         lazyItems(filteredTransfers) { transfer ->
 
                             val item = items.firstOrNull {
@@ -622,16 +872,12 @@ fun ReportsScreen(
                             color = ReportMuted
                         )
                     } else if (filtered.isEmpty()) {
-                        Text(
-                            "لا توجد حركات مطابقة.",
-                            color = ReportMuted
-                        )
+                        Text("لا توجد حركات مطابقة.", color = ReportMuted)
                     }
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-
                         lazyItems(filtered) { movement ->
 
                             val item = items.firstOrNull {
@@ -698,10 +944,7 @@ private fun ReportCard(
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            ReportBorder
-        ),
+        border = BorderStroke(1.dp, ReportBorder),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp
         )
