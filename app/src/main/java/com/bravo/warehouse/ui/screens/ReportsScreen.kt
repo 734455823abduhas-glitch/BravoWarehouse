@@ -43,7 +43,13 @@ val transfers by transferRepository.getAllTransfers()
 var selectedReport by remember { mutableStateOf<String?>(null) }
 var searchText by remember { mutableStateOf("") }
 
-val approved = movements.filter { it.isApproved }
+val approved = movements
+    .filter { it.isApproved }
+    .sortedByDescending { it.movementDate }
+
+val approvedTransfers = transfers
+    .filter { it.isApproved }
+    .sortedByDescending { it.transferDate }
 
 val incomingTypes = listOf("IN")
 val outgoingTypes = listOf("OUT")
@@ -169,6 +175,7 @@ Column(
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+
                 Text(
                     "ملخص المخزون",
                     color = Color.White,
@@ -193,7 +200,7 @@ Column(
                 )
 
                 Text(
-                    "عدد التحويلات: ${transfers.size}",
+                    "عدد التحويلات المعتمدة: ${approvedTransfers.size}",
                     color = Color.White
                 )
             }
@@ -217,15 +224,22 @@ Column(
 
             "أرصدة الأصناف" -> {
 
+                val filteredItems = items.filter {
+                    it.itemName.contains(searchText, true) ||
+                    it.itemCode.contains(searchText, true)
+                }
+
+                if (filteredItems.isEmpty() || warehouses.isEmpty()) {
+                    Text(
+                        "لا توجد أصناف أو مخازن لعرض الأرصدة.",
+                        color = ReportNavy
+                    )
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    lazyItems(
-                        items.filter {
-                            it.itemName.contains(searchText, true) ||
-                            it.itemCode.contains(searchText, true)
-                        }
-                    ) { item ->
+                    lazyItems(filteredItems) { item ->
 
                         warehouses.forEach { warehouse ->
 
@@ -256,17 +270,15 @@ Column(
 
                             val balance = incoming - outgoing
 
-                            if (incoming != 0.0 || outgoing != 0.0) {
-                                ReportCard(
-                                    title = "${item.itemCode} - ${item.itemName}",
-                                    lines = listOf(
-                                        "المخزن: ${warehouse.warehouseName}",
-                                        "الوارد: $incoming ${item.unit}",
-                                        "المنصرف: $outgoing ${item.unit}",
-                                        "الرصيد: $balance ${item.unit}"
-                                    )
+                            ReportCard(
+                                title = "${item.itemCode} - ${item.itemName}",
+                                lines = listOf(
+                                    "المخزن: ${warehouse.warehouseName}",
+                                    "الوارد: $incoming ${item.unit}",
+                                    "المنصرف: $outgoing ${item.unit}",
+                                    "الرصيد: $balance ${item.unit}"
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -274,7 +286,7 @@ Column(
 
             "تقرير التحويلات" -> {
 
-                val filteredTransfers = transfers.filter { transfer ->
+                val filteredTransfers = approvedTransfers.filter { transfer ->
 
                     val item = items.firstOrNull {
                         it.id == transfer.itemId
@@ -288,7 +300,7 @@ Column(
 
                 if (filteredTransfers.isEmpty()) {
                     Text(
-                        "لا توجد تحويلات مطابقة.",
+                        "لا توجد تحويلات معتمدة مطابقة.",
                         color = ReportNavy
                     )
                 }
@@ -318,10 +330,7 @@ Column(
                                 "من المخزن: ${source?.warehouseName ?: "غير معروف"}",
                                 "إلى المخزن: ${destination?.warehouseName ?: "غير معروف"}",
                                 "الكمية: ${transfer.quantity} ${item?.unit ?: ""}",
-                                "الحالة: ${
-                                    if (transfer.isApproved) "معتمد"
-                                    else "غير معتمد"
-                                }",
+                                "الحالة: معتمد",
                                 "الملاحظات: ${transfer.notes}"
                             )
                         )
