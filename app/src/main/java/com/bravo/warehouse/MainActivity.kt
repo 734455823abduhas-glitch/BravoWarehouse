@@ -48,7 +48,9 @@ override fun onCreate(savedInstanceState: Bundle?) {
     database = DatabaseProvider.getDatabase(applicationContext)
 
     setContent {
-        BravoWarehouseApp(database)
+        BravoWarehouseApp(database) {
+            recreate()
+        }
     }
 }
 
@@ -59,7 +61,10 @@ private val Background = Color(0xFFF4F6FA)
 private val Green = Color(0xFF238B65)
 
 @Composable
-fun BravoWarehouseApp(database: AppDatabase) {
+fun BravoWarehouseApp(
+database: AppDatabase,
+onRestoreComplete: () -> Unit
+) {
 
 val itemRepository = remember {
     ItemRepository(database.itemDao())
@@ -150,7 +155,8 @@ CompositionLocalProvider(
             "backup" -> BackupScreen(
                 onBack = {
                     currentScreen = "dashboard"
-                }
+                },
+                onRestoreComplete = onRestoreComplete
             )
 
             "transfers" -> {
