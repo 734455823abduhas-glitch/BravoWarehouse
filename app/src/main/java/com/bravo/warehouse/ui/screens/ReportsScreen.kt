@@ -572,7 +572,7 @@ fun ReportsScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // أزرار معاينة وتصدير التقرير الحالي
+            // أزرار المعاينة والطباعة والتصدير
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -629,6 +629,51 @@ fun ReportsScreen(
                         if (exportRows.isEmpty()) {
                             Toast.makeText(
                                 context,
+                                "لا توجد بيانات للطباعة",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            try {
+                                val file = ReportExportUtils.createPdf(
+                                    context,
+                                    selectedReport ?: "التقرير المخزني",
+                                    exportHeaders,
+                                    exportRows
+                                )
+
+                                ReportExportUtils.printPdf(context, file)
+
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "تعذرت الطباعة: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 10.dp
+                    ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ReportRed
+                    )
+                ) {
+                    Text(
+                        "طباعة",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (exportRows.isEmpty()) {
+                            Toast.makeText(
+                                context,
                                 "لا توجد بيانات لتصديرها",
                                 Toast.LENGTH_SHORT
                             ).show()
@@ -659,7 +704,7 @@ fun ReportsScreen(
                         vertical = 10.dp
                     ),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = ReportRed
+                        containerColor = ReportNavy
                     )
                 ) {
                     Text(
