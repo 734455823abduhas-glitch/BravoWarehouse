@@ -4,15 +4,14 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bravo.warehouse.data.DatabaseBackupManager
@@ -60,14 +59,22 @@ val restoreLauncher = rememberLauncherForActivityResult(
             isLoading = true
             message = ""
 
+            var restoreSucceeded = false
+
             try {
                 DatabaseBackupManager.importBackup(context, uri)
                 message = "تمت الاستعادة بنجاح"
-                onRestoreComplete()
+                restoreSucceeded = true
+
             } catch (e: Exception) {
                 message = "فشلت الاستعادة: ${e.message}"
+
             } finally {
                 isLoading = false
+            }
+
+            if (restoreSucceeded) {
+                onRestoreComplete()
             }
         }
     }
@@ -165,7 +172,9 @@ CompositionLocalProvider(
     if (showRestoreDialog) {
         AlertDialog(
             onDismissRequest = {
-                showRestoreDialog = false
+                if (!isLoading) {
+                    showRestoreDialog = false
+                }
             },
             title = {
                 Text("تأكيد الاستعادة")
@@ -178,6 +187,7 @@ CompositionLocalProvider(
             },
             confirmButton = {
                 TextButton(
+                    enabled = !isLoading,
                     onClick = {
                         showRestoreDialog = false
                         restoreLauncher.launch(arrayOf("*/*"))
@@ -188,6 +198,7 @@ CompositionLocalProvider(
             },
             dismissButton = {
                 TextButton(
+                    enabled = !isLoading,
                     onClick = {
                         showRestoreDialog = false
                     }
