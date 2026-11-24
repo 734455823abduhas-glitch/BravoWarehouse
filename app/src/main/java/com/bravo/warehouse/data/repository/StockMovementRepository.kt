@@ -22,7 +22,8 @@ class StockMovementRepository(
     suspend fun insertMovement(
         movement: StockMovementEntity
     ): Long {
-        require(movement.quantity > 0) {
+
+        require(movement.quantity.isFinite() && movement.quantity > 0) {
             "Quantity must be greater than zero"
         }
 
@@ -30,9 +31,10 @@ class StockMovementRepository(
             movement.movementType in listOf(
                 "IN",
                 "OUT",
-                "TRANSFER",
-                "RETURN",
-                "ADJUSTMENT"
+                "RETURN_IN",
+                "RETURN_OUT",
+                "ADJUSTMENT_IN",
+                "ADJUSTMENT_OUT"
             )
         ) {
             "Invalid movement type"
