@@ -32,6 +32,7 @@ import com.bravo.warehouse.ui.screens.ItemsScreen
 import com.bravo.warehouse.ui.screens.WarehouseScreen
 import com.bravo.warehouse.ui.screens.StockMovementsScreen
 import com.bravo.warehouse.ui.screens.TransferScreen
+import com.bravo.warehouse.ui.screens.StocktakingScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -125,6 +126,15 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     }
                 )
 
+                "stocktaking" -> StocktakingScreen(
+                    itemRepository = itemRepository,
+                    warehouseRepository = warehouseRepository,
+                    movementRepository = movementRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
+
                 "transfers" -> {
 
                     Column(
@@ -196,7 +206,10 @@ fun BravoWarehouseApp(database: AppDatabase) {
                             "المرتجعات" ->
                                 currentScreen = "returns"
 
-                            "الجرد", "التقارير" ->
+                            "الجرد" ->
+                                currentScreen = "stocktaking"
+
+                            "التقارير" ->
                                 unavailableFeature = title
                         }
                     }
@@ -213,9 +226,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                         Text("القسم قيد التطوير")
                     },
                     text = {
-                        Text(
-                            "قسم ${unavailableFeature} لم يتم تفعيله بعد."
-                        )
+                        Text("قسم ${unavailableFeature} لم يتم تفعيله بعد.")
                     },
                     confirmButton = {
                         TextButton(
