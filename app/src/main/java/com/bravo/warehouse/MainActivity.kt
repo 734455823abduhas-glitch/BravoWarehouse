@@ -37,6 +37,7 @@ import com.bravo.warehouse.ui.screens.TransferScreen
 import com.bravo.warehouse.ui.screens.StocktakingScreen
 import com.bravo.warehouse.ui.screens.ReportsScreen
 import com.bravo.warehouse.ui.screens.BackupScreen
+import com.bravo.warehouse.ui.screens.SettingsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -159,6 +160,17 @@ CompositionLocalProvider(
                 onRestoreComplete = onRestoreComplete
             )
 
+            "settings" -> SettingsScreen(
+                itemCount = items.size,
+                warehouseCount = warehouses.size,
+                onBack = {
+                    currentScreen = "dashboard"
+                },
+                onBackupClick = {
+                    currentScreen = "backup"
+                }
+            )
+
             "transfers" -> {
 
                 Column(
@@ -238,6 +250,9 @@ CompositionLocalProvider(
 
                         "النسخ الاحتياطي" ->
                             currentScreen = "backup"
+
+                        "الإعدادات" ->
+                            currentScreen = "settings"
                     }
                 }
             )
@@ -263,7 +278,8 @@ val menuItems = listOf(
     "المرتجعات" to "↩️",
     "الجرد" to "📋",
     "التقارير" to "📊",
-    "النسخ الاحتياطي" to "💾"
+    "النسخ الاحتياطي" to "💾",
+    "الإعدادات" to "⚙️"
 )
 
 Scaffold(
