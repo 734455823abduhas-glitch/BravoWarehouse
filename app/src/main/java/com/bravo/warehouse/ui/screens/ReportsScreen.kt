@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.bravo.warehouse.data.repository.ItemRepository
 import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.data.repository.StockMovementRepository
+import com.bravo.warehouse.data.repository.TransferRepository
 
 private val ReportNavy = Color(0xFF17365D)
 private val ReportGreen = Color(0xFF238B65)
@@ -24,6 +25,7 @@ fun ReportsScreen(
 itemRepository: ItemRepository,
 warehouseRepository: WarehouseRepository,
 movementRepository: StockMovementRepository,
+transferRepository: TransferRepository,
 onBack: () -> Unit
 ) {
 val items by itemRepository.getAllItems()
@@ -33,6 +35,9 @@ val warehouses by warehouseRepository.getAllWarehouses()
     .collectAsState(initial = emptyList())
 
 val movements by movementRepository.getAllMovements()
+    .collectAsState(initial = emptyList())
+
+val transfers by transferRepository.getAllTransfers()
     .collectAsState(initial = emptyList())
 
 var selectedReport by remember { mutableStateOf<String?>(null) }
@@ -186,6 +191,11 @@ Column(
                     "عدد الحركات المعتمدة: ${approved.size}",
                     color = Color.White
                 )
+
+                Text(
+                    "عدد التحويلات: ${transfers.size}",
+                    color = Color.White
+                )
             }
         }
 
@@ -210,10 +220,12 @@ Column(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    lazyItems(items.filter {
-                        it.itemName.contains(searchText, true) ||
-                        it.itemCode.contains(searchText, true)
-                    }) { item ->
+                    lazyItems(
+                        items.filter {
+                            it.itemName.contains(searchText, true) ||
+                            it.itemCode.contains(searchText, true)
+                        }
+                    ) { item ->
 
                         warehouses.forEach { warehouse ->
 
@@ -225,7 +237,9 @@ Column(
                             val incoming = itemMovements
                                 .filter {
                                     it.movementType in listOf(
-                                        "IN", "RETURN_IN", "ADJUSTMENT_IN"
+                                        "IN",
+                                        "RETURN_IN",
+                                        "ADJUSTMENT_IN"
                                     )
                                 }
                                 .sumOf { it.quantity }
@@ -233,7 +247,9 @@ Column(
                             val outgoing = itemMovements
                                 .filter {
                                     it.movementType in listOf(
-                                        "OUT", "RETURN_OUT", "ADJUSTMENT_OUT"
+                                        "OUT",
+                                        "RETURN_OUT",
+                                        "ADJUSTMENT_OUT"
                                     )
                                 }
                                 .sumOf { it.quantity }
@@ -256,11 +272,67 @@ Column(
                 }
             }
 
+            "تقرير التحويلات" -> {
+
+                val filteredTransfers = transfers.filter { transfer ->
+
+                    val item = items.firstOrNull {
+                        it.id == transfer.itemId
+                    }
+
+                    searchText.isBlank() ||
+                    transfer.transferNumber.contains(searchText, true) ||
+                    (item?.itemName?.contains(searchText, true) == true) ||
+                    (item?.itemCode?.contains(searchText, true) == true)
+                }
+
+                if (filteredTransfers.isEmpty()) {
+                    Text(
+                        "لا توجد تحويلات مطابقة.",
+                        color = ReportNavy
+                    )
+                }
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    lazyItems(filteredTransfers) { transfer ->
+
+                        val item = items.firstOrNull {
+                            it.id == transfer.itemId
+                        }
+
+                        val source = warehouses.firstOrNull {
+                            it.id == transfer.sourceWarehouseId
+                        }
+
+                        val destination = warehouses.firstOrNull {
+                            it.id == transfer.destinationWarehouseId
+                        }
+
+                        ReportCard(
+                            title = "تحويل رقم: ${transfer.transferNumber}",
+                            lines = listOf(
+                                "الصنف: ${item?.itemName ?: "غير معروف"}",
+                                "رمز الصنف: ${item?.itemCode ?: "غير معروف"}",
+                                "من المخزن: ${source?.warehouseName ?: "غير معروف"}",
+                                "إلى المخزن: ${destination?.warehouseName ?: "غير معروف"}",
+                                "الكمية: ${transfer.quantity} ${item?.unit ?: ""}",
+                                "الحالة: ${
+                                    if (transfer.isApproved) "معتمد"
+                                    else "غير معتمد"
+                                }",
+                                "الملاحظات: ${transfer.notes}"
+                            )
+                        )
+                    }
+                }
+            }
+
             "تقرير الوارد",
             "تقرير المنصرف",
             "تقرير المرتجعات",
             "تقرير الجرد",
-            "تقرير التحويلات",
             "كشف حركة صنف" -> {
 
                 val filtered = approved.filter { movement ->
@@ -276,6 +348,7 @@ Column(
                         movement.documentNumber.contains(searchText, true)
 
                     val matchesReport = when (selectedReport) {
+
                         "تقرير الوارد" ->
                             movement.movementType in incomingTypes
 
@@ -288,10 +361,6 @@ Column(
                         "تقرير الجرد" ->
                             movement.movementType in adjustmentTypes
 
-                        "تقرير التحويلات" ->
-                            movement.notes.contains("تحويل", true) ||
-                            movement.notes.contains("transfer", true)
-
                         "كشف حركة صنف" -> true
 
                         else -> false
@@ -300,17 +369,12 @@ Column(
                     matchesSearch && matchesReport
                 }
 
-                if (selectedReport == "كشف حركة صنف" && searchText.isBlank()) {
-                    Text(
-                        "ابحث باسم الصنف أو رقمه لعرض حركته.",
-                        color = ReportNavy
-                    )
-                } else if (
-                    selectedReport == "تقرير التحويلات" &&
-                    filtered.isEmpty()
+                if (
+                    selectedReport == "كشف حركة صنف" &&
+                    searchText.isBlank()
                 ) {
                     Text(
-                        "لا توجد حركات تحويل يمكن تمييزها من ملاحظات الحركات. سنربط سجل التحويلات مباشرة في الخطوة التالية.",
+                        "ابحث باسم الصنف أو رقمه لعرض حركته.",
                         color = ReportNavy
                     )
                 } else if (filtered.isEmpty()) {
