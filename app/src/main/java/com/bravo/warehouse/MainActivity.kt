@@ -24,12 +24,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 
 import com.bravo.warehouse.data.DatabaseProvider
 import com.bravo.warehouse.data.AppDatabase
-
 import com.bravo.warehouse.data.repository.ItemRepository
 import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.data.repository.StockMovementRepository
 import com.bravo.warehouse.data.repository.TransferRepository
-
 import com.bravo.warehouse.ui.screens.ItemsScreen
 import com.bravo.warehouse.ui.screens.WarehouseScreen
 import com.bravo.warehouse.ui.screens.StockMovementsScreen
@@ -163,6 +161,7 @@ CompositionLocalProvider(
             "settings" -> SettingsScreen(
                 itemCount = items.size,
                 warehouseCount = warehouses.size,
+                warehouses = warehouses,
                 onBack = {
                     currentScreen = "dashboard"
                 },
@@ -211,6 +210,7 @@ CompositionLocalProvider(
                     Box(
                         modifier = Modifier.weight(1f)
                     ) {
+
                         TransferScreen(
                             items = items,
                             warehouses = warehouses,
