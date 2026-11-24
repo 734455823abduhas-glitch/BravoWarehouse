@@ -20,6 +20,11 @@ suspend fun getMovementById(id: Long) =
     stockMovementDao.getMovementById(id)
 
 suspend fun insertMovement(movement: StockMovementEntity): Long {
+
+    require(!movement.isApproved) {
+        "Approved movements must use the safe approval method"
+    }
+
     require(movement.quantity.isFinite() && movement.quantity > 0) {
         "Quantity must be greater than zero"
     }
