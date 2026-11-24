@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.print.PageRange
@@ -424,5 +425,22 @@ object ReportExportUtils {
         context.startActivity(
             Intent.createChooser(intent, "مشاركة التقرير")
         )
+    }
+
+    // حفظ ملف PDF أو Excel في المكان الذي يختاره المستخدم
+    fun saveToUri(
+        context: Context,
+        sourceFile: File,
+        destinationUri: Uri
+    ) {
+        require(sourceFile.exists()) {
+            "الملف المراد حفظه غير موجود"
+        }
+
+        context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+            sourceFile.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        } ?: throw IllegalStateException("تعذر فتح مكان الحفظ")
     }
 }
