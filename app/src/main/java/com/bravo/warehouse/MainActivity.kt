@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +36,7 @@ import com.bravo.warehouse.ui.screens.StockMovementsScreen
 import com.bravo.warehouse.ui.screens.TransferScreen
 import com.bravo.warehouse.ui.screens.StocktakingScreen
 import com.bravo.warehouse.ui.screens.ReportsScreen
+import com.bravo.warehouse.ui.screens.BackupScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -147,6 +147,12 @@ CompositionLocalProvider(
                 }
             )
 
+            "backup" -> BackupScreen(
+                onBack = {
+                    currentScreen = "dashboard"
+                }
+            )
+
             "transfers" -> {
 
                 Column(
@@ -223,6 +229,9 @@ CompositionLocalProvider(
 
                         "التقارير" ->
                             currentScreen = "reports"
+
+                        "النسخ الاحتياطي" ->
+                            currentScreen = "backup"
                     }
                 }
             )
@@ -247,7 +256,8 @@ val menuItems = listOf(
     "التحويلات" to "🔄",
     "المرتجعات" to "↩️",
     "الجرد" to "📋",
-    "التقارير" to "📊"
+    "التقارير" to "📊",
+    "النسخ الاحتياطي" to "💾"
 )
 
 Scaffold(
