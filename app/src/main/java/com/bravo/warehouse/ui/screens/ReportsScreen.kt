@@ -32,10 +32,12 @@ fun ReportsScreen(
 ) {
     val context = LocalContext.current
 
-    val items by itemRepository.getAllItems()
+    // جلب جميع الأصناف بما فيها المتوقفة
+    val items by itemRepository.getAllItemsIncludingInactive()
         .collectAsState(initial = emptyList())
 
-    val warehouses by warehouseRepository.getAllWarehouses()
+    // جلب جميع المخازن بما فيها المتوقفة
+    val warehouses by warehouseRepository.getAllWarehousesIncludingInactive()
         .collectAsState(initial = emptyList())
 
     val movements by movementRepository.getAllMovements()
@@ -47,6 +49,15 @@ fun ReportsScreen(
     var selectedReport by remember { mutableStateOf<String?>(null) }
     var searchText by remember { mutableStateOf("") }
 
+    // null تعني عرض جميع المخازن
+    var selectedWarehouseId by remember {
+        mutableStateOf<Long?>(null)
+    }
+
+    var warehouseMenuExpanded by remember {
+        mutableStateOf(false)
+    }
+
     val approved = movements
         .filter { it.isApproved }
         .sortedByDescending { it.movementDate }
@@ -55,10 +66,21 @@ fun ReportsScreen(
         .filter { it.isApproved }
         .sortedByDescending { it.transferDate }
 
-    val incomingTypes = listOf("IN")
-    val outgoingTypes = listOf("OUT")
-    val returnTypes = listOf("RETURN_IN", "RETURN_OUT")
-    val adjustmentTypes = listOf("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
+    val selectedWarehouse = warehouses.firstOrNull {
+        it.id == selectedWarehouseId
+    }
+
+    val incomingTypes = listOf(
+        "IN",
+        "RETURN_IN",
+        "ADJUSTMENT_IN"
+    )
+
+    val outgoingTypes = listOf(
+        "OUT",
+        "RETURN_OUT",
+        "ADJUSTMENT_OUT"
+    )
 
     val reportButtons = listOf(
         "أرصدة الأصناف" to "📦",
@@ -75,6 +97,7 @@ fun ReportsScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -85,6 +108,7 @@ fun ReportsScreen(
                     if (selectedReport != null) {
                         selectedReport = null
                         searchText = ""
+                        selectedWarehouseId = null
                     } else {
                         onBack()
                     }
@@ -105,6 +129,7 @@ fun ReportsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (selectedReport == null) {
+
             Text(
                 "اختر التقرير المطلوب",
                 style = MaterialTheme.typography.titleMedium,
@@ -114,11 +139,13 @@ fun ReportsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             reportButtons.chunked(2).forEach { rowItems ->
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     rowItems.forEach { report ->
+
                         Card(
                             modifier = Modifier
                                 .weight(1f)
@@ -165,8 +192,6 @@ fun ReportsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -174,6 +199,7 @@ fun ReportsScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+
                     Text(
                         "ملخص المخزون",
                         color = Color.White,
@@ -183,22 +209,42 @@ fun ReportsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        "عدد الأصناف: ${items.size}",
+                        "جميع الأصناف: ${items.size}",
                         color = Color.White
                     )
 
                     Text(
-                        "عدد المخازن: ${warehouses.size}",
+                        "الأصناف النشطة: ${items.count { it.isActive }}",
                         color = Color.White
                     )
 
                     Text(
-                        "عدد الحركات المعتمدة: ${approved.size}",
+                        "الأصناف المتوقفة: ${items.count { !it.isActive }}",
                         color = Color.White
                     )
 
                     Text(
-                        "عدد التحويلات المعتمدة: ${approvedTransfers.size}",
+                        "جميع المخازن: ${warehouses.size}",
+                        color = Color.White
+                    )
+
+                    Text(
+                        "المخازن النشطة: ${warehouses.count { it.isActive }}",
+                        color = Color.White
+                    )
+
+                    Text(
+                        "المخازن المتوقفة: ${warehouses.count { !it.isActive }}",
+                        color = Color.White
+                    )
+
+                    Text(
+                        "الحركات المعتمدة: ${approved.size}",
+                        color = Color.White
+                    )
+
+                    Text(
+                        "التحويلات المعتمدة: ${approvedTransfers.size}",
                         color = Color.White
                     )
 
@@ -217,11 +263,80 @@ fun ReportsScreen(
             }
 
         } else {
+
+            // اختيار المخزن الذي سيعرض التقرير بياناته
+            Text(
+                "تصفية حسب المخزن",
+                color = ReportNavy,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+
+                OutlinedButton(
+                    onClick = {
+                        warehouseMenuExpanded = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        selectedWarehouse?.let {
+                            it.warehouseName +
+                                if (it.isActive) " (نشط)" else " (متوقف)"
+                        } ?: "جميع المخازن"
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = warehouseMenuExpanded,
+                    onDismissRequest = {
+                        warehouseMenuExpanded = false
+                    }
+                ) {
+
+                    DropdownMenuItem(
+                        text = {
+                            Text("جميع المخازن")
+                        },
+                        onClick = {
+                            selectedWarehouseId = null
+                            warehouseMenuExpanded = false
+                        }
+                    )
+
+                    warehouses.forEach { warehouse ->
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    warehouse.warehouseName +
+                                        if (warehouse.isActive) {
+                                            " (نشط)"
+                                        } else {
+                                            " (متوقف)"
+                                        }
+                                )
+                            },
+                            onClick = {
+                                selectedWarehouseId = warehouse.id
+                                warehouseMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             OutlinedTextField(
                 value = searchText,
-                onValueChange = { searchText = it },
+                onValueChange = {
+                    searchText = it
+                },
                 label = {
-                    Text("بحث باسم الصنف أو رقم المستند")
+                    Text("بحث باسم الصنف أو رقمه أو رقم المستند")
                 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
@@ -231,46 +346,59 @@ fun ReportsScreen(
 
             when (selectedReport) {
 
+                // =========================
+                // أرصدة الأصناف
+                // =========================
+
                 "أرصدة الأصناف" -> {
+
                     val filteredItems = items.filter {
-                        it.itemName.contains(searchText, true) ||
+                        searchText.isBlank() ||
+                            it.itemName.contains(searchText, true) ||
                             it.itemCode.contains(searchText, true)
                     }
 
                     val balanceRows = filteredItems.flatMap { item ->
-                        warehouses.map { warehouse ->
-                            val itemMovements = approved.filter {
-                                it.itemId == item.id &&
-                                    it.warehouseId == warehouse.id
+
+                        warehouses
+                            .filter { warehouse ->
+                                selectedWarehouseId == null ||
+                                    warehouse.id == selectedWarehouseId
                             }
+                            .map { warehouse ->
 
-                            val incoming = itemMovements
-                                .filter {
-                                    it.movementType in listOf(
-                                        "IN",
-                                        "RETURN_IN",
-                                        "ADJUSTMENT_IN"
-                                    )
+                                val itemMovements = approved.filter {
+                                    it.itemId == item.id &&
+                                        it.warehouseId == warehouse.id
                                 }
-                                .sumOf { it.quantity }
 
-                            val outgoing = itemMovements
-                                .filter {
-                                    it.movementType in listOf(
-                                        "OUT",
-                                        "RETURN_OUT",
-                                        "ADJUSTMENT_OUT"
+                                val incoming = itemMovements
+                                    .filter {
+                                        it.movementType in incomingTypes
+                                    }
+                                    .sumOf { it.quantity }
+
+                                val outgoing = itemMovements
+                                    .filter {
+                                        it.movementType in outgoingTypes
+                                    }
+                                    .sumOf { it.quantity }
+
+                                Triple(
+                                    item,
+                                    warehouse,
+                                    Triple(
+                                        incoming,
+                                        outgoing,
+                                        incoming - outgoing
                                     )
-                                }
-                                .sumOf { it.quantity }
-
-                            Triple(item, warehouse, incoming - outgoing)
-                        }
+                                )
+                            }
                     }
 
                     if (balanceRows.isEmpty()) {
                         Text(
-                            "لا توجد أصناف أو مخازن لعرض الأرصدة.",
+                            "لا توجد أرصدة مطابقة.",
                             color = ReportNavy
                         )
                     }
@@ -278,40 +406,25 @@ fun ReportsScreen(
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+
                         lazyItems(balanceRows) { row ->
+
                             val item = row.first
                             val warehouse = row.second
-                            val balance = row.third
-
-                            val itemMovements = approved.filter {
-                                it.itemId == item.id &&
-                                    it.warehouseId == warehouse.id
-                            }
-
-                            val incoming = itemMovements
-                                .filter {
-                                    it.movementType in listOf(
-                                        "IN",
-                                        "RETURN_IN",
-                                        "ADJUSTMENT_IN"
-                                    )
-                                }
-                                .sumOf { it.quantity }
-
-                            val outgoing = itemMovements
-                                .filter {
-                                    it.movementType in listOf(
-                                        "OUT",
-                                        "RETURN_OUT",
-                                        "ADJUSTMENT_OUT"
-                                    )
-                                }
-                                .sumOf { it.quantity }
+                            val incoming = row.third.first
+                            val outgoing = row.third.second
+                            val balance = row.third.third
 
                             ReportCard(
                                 title = "${item.itemCode} - ${item.itemName}",
                                 lines = listOf(
+                                    "حالة الصنف: ${
+                                        if (item.isActive) "نشط" else "متوقف"
+                                    }",
                                     "المخزن: ${warehouse.warehouseName}",
+                                    "حالة المخزن: ${
+                                        if (warehouse.isActive) "نشط" else "متوقف"
+                                    }",
                                     "الوارد: $incoming ${item.unit}",
                                     "المنصرف: $outgoing ${item.unit}",
                                     "الرصيد: $balance ${item.unit}"
@@ -321,21 +434,35 @@ fun ReportsScreen(
                     }
                 }
 
+                // =========================
+                // تقرير التحويلات
+                // =========================
+
                 "تقرير التحويلات" -> {
+
                     val filteredTransfers = approvedTransfers.filter { transfer ->
+
                         val item = items.firstOrNull {
                             it.id == transfer.itemId
                         }
 
-                        searchText.isBlank() ||
-                            transfer.transferNumber.contains(searchText, true) ||
-                            (item?.itemName?.contains(searchText, true) == true) ||
-                            (item?.itemCode?.contains(searchText, true) == true)
+                        val matchesWarehouse =
+                            selectedWarehouseId == null ||
+                                transfer.sourceWarehouseId == selectedWarehouseId ||
+                                transfer.destinationWarehouseId == selectedWarehouseId
+
+                        val matchesSearch =
+                            searchText.isBlank() ||
+                                transfer.transferNumber.contains(searchText, true) ||
+                                (item?.itemName?.contains(searchText, true) == true) ||
+                                (item?.itemCode?.contains(searchText, true) == true)
+
+                        matchesWarehouse && matchesSearch
                     }
 
                     if (filteredTransfers.isEmpty()) {
                         Text(
-                            "لا توجد تحويلات معتمدة مطابقة.",
+                            "لا توجد تحويلات مطابقة.",
                             color = ReportNavy
                         )
                     }
@@ -343,7 +470,9 @@ fun ReportsScreen(
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+
                         lazyItems(filteredTransfers) { transfer ->
+
                             val item = items.firstOrNull {
                                 it.id == transfer.itemId
                             }
@@ -360,7 +489,11 @@ fun ReportsScreen(
                                 title = "تحويل رقم: ${transfer.transferNumber}",
                                 lines = listOf(
                                     "الصنف: ${item?.itemName ?: "غير معروف"}",
-                                    "رمز الصنف: ${item?.itemCode ?: "غير معروف"}",
+                                    "حالة الصنف: ${
+                                        item?.let {
+                                            if (it.isActive) "نشط" else "متوقف"
+                                        } ?: "غير معروف"
+                                    }",
                                     "من المخزن: ${source?.warehouseName ?: "غير معروف"}",
                                     "إلى المخزن: ${destination?.warehouseName ?: "غير معروف"}",
                                     "الكمية: ${transfer.quantity} ${item?.unit ?: ""}",
@@ -378,25 +511,32 @@ fun ReportsScreen(
                     }
                 }
 
+                // =========================
+                // تقارير الحركات
+                // =========================
+
                 "تقرير الوارد",
                 "تقرير المنصرف",
                 "تقرير المرتجعات",
                 "تقرير الجرد",
                 "كشف حركة صنف" -> {
 
-                    // الإصلاح: كشف حركة الصنف لا يعرض شيئاً
-                    // حتى يكتب المستخدم كلمة بحث.
                     val filtered = if (
                         selectedReport == "كشف حركة صنف" &&
                         searchText.isBlank()
                     ) {
                         emptyList()
                     } else {
+
                         approved.filter { movement ->
 
                             val item = items.firstOrNull {
                                 it.id == movement.itemId
                             }
+
+                            val matchesWarehouse =
+                                selectedWarehouseId == null ||
+                                    movement.warehouseId == selectedWarehouseId
 
                             val matchesSearch =
                                 searchText.isBlank() ||
@@ -405,24 +545,33 @@ fun ReportsScreen(
                                     movement.documentNumber.contains(searchText, true)
 
                             val matchesReport = when (selectedReport) {
+
                                 "تقرير الوارد" ->
-                                    movement.movementType in incomingTypes
+                                    movement.movementType == "IN"
 
                                 "تقرير المنصرف" ->
-                                    movement.movementType in outgoingTypes
+                                    movement.movementType == "OUT"
 
                                 "تقرير المرتجعات" ->
-                                    movement.movementType in returnTypes
+                                    movement.movementType in listOf(
+                                        "RETURN_IN",
+                                        "RETURN_OUT"
+                                    )
 
                                 "تقرير الجرد" ->
-                                    movement.movementType in adjustmentTypes
+                                    movement.movementType in listOf(
+                                        "ADJUSTMENT_IN",
+                                        "ADJUSTMENT_OUT"
+                                    )
 
                                 "كشف حركة صنف" -> true
 
                                 else -> false
                             }
 
-                            matchesSearch && matchesReport
+                            matchesWarehouse &&
+                                matchesSearch &&
+                                matchesReport
                         }
                     }
 
@@ -444,6 +593,7 @@ fun ReportsScreen(
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+
                         lazyItems(filtered) { movement ->
 
                             val item = items.firstOrNull {
@@ -467,9 +617,20 @@ fun ReportsScreen(
                             ReportCard(
                                 title = item?.itemName ?: "صنف غير معروف",
                                 lines = listOf(
+                                    "رمز الصنف: ${item?.itemCode ?: "غير معروف"}",
+                                    "حالة الصنف: ${
+                                        item?.let {
+                                            if (it.isActive) "نشط" else "متوقف"
+                                        } ?: "غير معروف"
+                                    }",
                                     "رقم المستند: ${movement.documentNumber}",
                                     "نوع الحركة: $typeName",
                                     "المخزن: ${warehouse?.warehouseName ?: "غير معروف"}",
+                                    "حالة المخزن: ${
+                                        warehouse?.let {
+                                            if (it.isActive) "نشط" else "متوقف"
+                                        } ?: "غير معروف"
+                                    }",
                                     "الكمية: ${movement.quantity} ${item?.unit ?: ""}",
                                     "التاريخ: ${
                                         DateTimeUtils.formatDateTime(
