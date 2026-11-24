@@ -44,6 +44,7 @@ fun StockMovementsScreen(
 
     var message by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
+    var currentBalance by remember { mutableStateOf(0.0) }
 
     val selectedItem = itemList.firstOrNull {
         it.id == selectedItemId
@@ -53,7 +54,13 @@ fun StockMovementsScreen(
         it.id == selectedWarehouseId
     }
 
-    var currentBalance by remember { mutableStateOf(0.0) }
+    val movementTitle = when (movementType) {
+        "IN" -> "وارد"
+        "OUT" -> "منصرف"
+        "RETURN_IN" -> "مرتجع للمخزن"
+        "RETURN_OUT" -> "مرتجع من المخزن"
+        else -> "حركة مخزون"
+    }
 
     LaunchedEffect(selectedItemId, selectedWarehouseId) {
         currentBalance = if (
@@ -93,40 +100,63 @@ fun StockMovementsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "تسجيل حركة جديدة",
+            text = "نوع الحركة",
             style = MaterialTheme.typography.titleLarge
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(
-                onClick = { movementType = "IN" },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (movementType == "IN")
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("وارد")
+            listOf(
+                "IN" to "وارد",
+                "OUT" to "منصرف"
+            ).forEach { (type, title) ->
+                Button(
+                    onClick = {
+                        movementType = type
+                        message = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (movementType == type)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Text(title)
+                }
             }
+        }
 
-            Button(
-                onClick = { movementType = "OUT" },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (movementType == "OUT")
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("منصرف")
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                "RETURN_IN" to "مرتجع للمخزن",
+                "RETURN_OUT" to "مرتجع من المخزن"
+            ).forEach { (type, title) ->
+                Button(
+                    onClick = {
+                        movementType = type
+                        message = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (movementType == type)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Text(title)
+                }
             }
         }
 
@@ -140,9 +170,7 @@ fun StockMovementsScreen(
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("اختر الصنف") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { itemMenu = true }
+                modifier = Modifier.fillMaxWidth()
             )
 
             Box(
@@ -156,7 +184,7 @@ fun StockMovementsScreen(
                 onDismissRequest = { itemMenu = false },
                 modifier = Modifier.heightIn(max = 300.dp)
             ) {
-                itemList.forEach { item ->
+                itemList.filter { it.isActive }.forEach { item ->
                     DropdownMenuItem(
                         text = {
                             Text("${item.itemCode} - ${item.itemName}")
@@ -178,9 +206,7 @@ fun StockMovementsScreen(
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("اختر المخزن") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { warehouseMenu = true }
+                modifier = Modifier.fillMaxWidth()
             )
 
             Box(
@@ -278,7 +304,7 @@ fun StockMovementsScreen(
                             movementRepository.approveMovement(movementId)
 
                         if (approved) {
-                            message = "تم حفظ واعتماد الحركة بنجاح"
+                            message = "تم حفظ واعتماد $movementTitle بنجاح"
 
                             quantity = ""
                             notes = ""
@@ -290,7 +316,7 @@ fun StockMovementsScreen(
                                 )
                         } else {
                             message =
-                                "لم يتم اعتماد الحركة. راجع الرصيد المتاح"
+                                "تعذر اعتماد الحركة. تحقق من الرصيد المتاح"
                         }
 
                     } catch (e: Exception) {
@@ -303,10 +329,14 @@ fun StockMovementsScreen(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isSaving
         ) {
-            Text(
-                if (isSaving) "جارٍ الحفظ..."
-                else "حفظ واعتماد الحركة"
-            )
+            if (isSaving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("حفظ واعتماد $movementTitle")
+            }
         }
 
         if (message.isNotEmpty()) {
@@ -318,7 +348,7 @@ fun StockMovementsScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         HorizontalDivider()
 
@@ -376,6 +406,10 @@ fun StockMovementsScreen(
                             )
 
                             Text("الكمية: ${movement.quantity}")
+
+                            if (movement.notes.isNotBlank()) {
+                                Text("ملاحظات: ${movement.notes}")
+                            }
 
                             Text(
                                 if (movement.isApproved)
