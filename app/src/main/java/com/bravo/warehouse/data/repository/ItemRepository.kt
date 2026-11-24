@@ -11,10 +11,11 @@ class ItemRepository(
     fun getAllItems() =
         itemDao.getAllItems()
 
-    // جميع الأصناف للتقارير والسجل التاريخي
+    // جميع الأصناف، بما فيها المتوقفة، للتقارير
     fun getAllItemsIncludingInactive() =
         itemDao.getAllItemsIncludingInactive()
 
+    // البحث في الأصناف النشطة
     fun searchItems(search: String) =
         itemDao.searchItems(search)
 
