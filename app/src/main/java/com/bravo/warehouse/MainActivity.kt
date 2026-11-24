@@ -32,7 +32,6 @@ import com.bravo.warehouse.ui.screens.ItemsScreen
 import com.bravo.warehouse.ui.screens.WarehouseScreen
 import com.bravo.warehouse.ui.screens.StockMovementsScreen
 import com.bravo.warehouse.ui.screens.TransferScreen
-import androidx.compose.runtime.collectAsState
 
 class MainActivity : ComponentActivity() {
 
@@ -82,7 +81,10 @@ fun BravoWarehouseApp(database: AppDatabase) {
         mutableStateOf("dashboard")
     }
 
-    // زر الرجوع في الهاتف يعيد المستخدم إلى لوحة التحكم
+    var unavailableFeature by remember {
+        mutableStateOf<String?>(null)
+    }
+
     BackHandler(enabled = currentScreen != "dashboard") {
         currentScreen = "dashboard"
     }
@@ -97,6 +99,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                 background = Background
             )
         ) {
+
             when (currentScreen) {
 
                 "items" -> ItemsScreen(
@@ -123,6 +126,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                 )
 
                 "transfers" -> {
+
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -133,6 +137,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+
                             TextButton(
                                 onClick = {
                                     currentScreen = "dashboard"
@@ -170,13 +175,53 @@ fun BravoWarehouseApp(database: AppDatabase) {
                 }
 
                 else -> DashboardScreen(
+                    itemCount = items.size,
+                    warehouseCount = warehouses.size,
                     onMenuClick = { title ->
+
                         when (title) {
-                            "الأصناف" -> currentScreen = "items"
-                            "المخازن" -> currentScreen = "warehouses"
-                            "الوارد" -> currentScreen = "movements"
-                            "المنصرف" -> currentScreen = "movements"
-                            "التحويلات" -> currentScreen = "transfers"
+
+                            "الأصناف" ->
+                                currentScreen = "items"
+
+                            "المخازن" ->
+                                currentScreen = "warehouses"
+
+                            "الوارد", "المنصرف" ->
+                                currentScreen = "movements"
+
+                            "التحويلات" ->
+                                currentScreen = "transfers"
+
+                            "المرتجعات", "الجرد", "التقارير" ->
+                                unavailableFeature = title
+                        }
+                    }
+                )
+            }
+
+            if (unavailableFeature != null) {
+
+                AlertDialog(
+                    onDismissRequest = {
+                        unavailableFeature = null
+                    },
+                    title = {
+                        Text("القسم قيد التطوير")
+                    },
+                    text = {
+                        Text(
+                            "قسم ${unavailableFeature} لم يتم تفعيله بعد. " +
+                            "سيتم تجهيزه وربطه بقاعدة بيانات المخزون."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                unavailableFeature = null
+                            }
+                        ) {
+                            Text("حسناً")
                         }
                     }
                 )
@@ -187,6 +232,8 @@ fun BravoWarehouseApp(database: AppDatabase) {
 
 @Composable
 fun DashboardScreen(
+    itemCount: Int,
+    warehouseCount: Int,
     onMenuClick: (String) -> Unit
 ) {
 
@@ -250,11 +297,18 @@ fun DashboardScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        DashboardStat("عدد الأصناف", "0")
-                        DashboardStat("عدد المخازن", "0")
-                        DashboardStat("تنبيهات الطلب", "0")
+
+                        DashboardStat(
+                            "عدد الأصناف",
+                            itemCount.toString()
+                        )
+
+                        DashboardStat(
+                            "عدد المخازن",
+                            warehouseCount.toString()
+                        )
                     }
                 }
             }
@@ -276,7 +330,9 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
+
                 items(menuItems) { item ->
+
                     MenuCard(
                         title = item.first,
                         icon = item.second,
@@ -310,7 +366,7 @@ fun DashboardStat(
         Text(
             text = title,
             color = Color.White.copy(alpha = 0.85f),
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
     }
@@ -327,7 +383,9 @@ fun MenuCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(115.dp)
-            .clickable { onClick() },
+            .clickable {
+                onClick()
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
