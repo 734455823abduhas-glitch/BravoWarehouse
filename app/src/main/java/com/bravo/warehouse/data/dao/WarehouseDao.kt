@@ -11,55 +11,57 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WarehouseDao {
 
-@Query("SELECT * FROM warehouses WHERE isActive = 1 ORDER BY warehouseName ASC")
-fun getAllWarehouses(): Flow<List<WarehouseEntity>>
+    // المخازن النشطة لشاشات الإدخال
+    @Query("SELECT * FROM warehouses WHERE isActive = 1 ORDER BY warehouseName ASC")
+    fun getAllWarehouses(): Flow<List<WarehouseEntity>>
 
-@Query("SELECT * FROM warehouses WHERE id = :warehouseId LIMIT 1")
-suspend fun getWarehouseById(warehouseId: Long): WarehouseEntity?
+    // جميع المخازن، النشطة والمتوقفة، للتقارير والسجل التاريخي
+    @Query("SELECT * FROM warehouses ORDER BY warehouseName ASC")
+    fun getAllWarehousesIncludingInactive(): Flow<List<WarehouseEntity>>
 
-@Insert(onConflict = OnConflictStrategy.ABORT)
-suspend fun insertWarehouse(warehouse: WarehouseEntity): Long
+    @Query("SELECT * FROM warehouses WHERE id = :warehouseId LIMIT 1")
+    suspend fun getWarehouseById(warehouseId: Long): WarehouseEntity?
 
-@Update
-suspend fun updateWarehouse(warehouse: WarehouseEntity)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertWarehouse(warehouse: WarehouseEntity): Long
 
-@Query("""
-    UPDATE warehouses
-    SET isActive = 0, updatedAt = :time
-    WHERE id = :warehouseId
-    AND NOT EXISTS (
-        SELECT itemId
-        FROM stock_movements
-        WHERE warehouseId = :warehouseId
-        AND isApproved = 1
-        GROUP BY itemId
-        HAVING ABS(
-            SUM(
-                CASE
-                    WHEN movementType IN (
-                        'IN',
-                        'RETURN_IN',
-                        'ADJUSTMENT_IN'
-                    ) THEN quantity
+    @Update
+    suspend fun updateWarehouse(warehouse: WarehouseEntity)
 
-                    WHEN movementType IN (
-                        'OUT',
-                        'RETURN_OUT',
-                        'ADJUSTMENT_OUT'
-                    ) THEN -quantity
+    @Query("""
+        UPDATE warehouses
+        SET isActive = 0, updatedAt = :time
+        WHERE id = :warehouseId
+        AND NOT EXISTS (
+            SELECT itemId
+            FROM stock_movements
+            WHERE warehouseId = :warehouseId
+            AND isApproved = 1
+            GROUP BY itemId
+            HAVING ABS(
+                SUM(
+                    CASE
+                        WHEN movementType IN (
+                            'IN',
+                            'RETURN_IN',
+                            'ADJUSTMENT_IN'
+                        ) THEN quantity
+                        WHEN movementType IN (
+                            'OUT',
+                            'RETURN_OUT',
+                            'ADJUSTMENT_OUT'
+                        ) THEN -quantity
+                        ELSE 0
+                    END
+                )
+            ) > 0.000001
+        )
+    """)
+    suspend fun deactivateWarehouse(
+        warehouseId: Long,
+        time: Long = System.currentTimeMillis()
+    ): Int
 
-                    ELSE 0
-                END
-            )
-        ) > 0.000001
-    )
-""")
-suspend fun deactivateWarehouse(
-    warehouseId: Long,
-    time: Long = System.currentTimeMillis()
-): Int
-
-@Query("SELECT COUNT(*) FROM warehouses WHERE warehouseCode = :code")
-suspend fun countByCode(code: String): Int
-
+    @Query("SELECT COUNT(*) FROM warehouses WHERE warehouseCode = :code")
+    suspend fun countByCode(code: String): Int
 }
