@@ -4,30 +4,34 @@ import com.bravo.warehouse.data.dao.WarehouseDao
 import com.bravo.warehouse.data.entity.WarehouseEntity
 
 class WarehouseRepository(
-private val warehouseDao: WarehouseDao
+    private val warehouseDao: WarehouseDao
 ) {
 
-fun getAllWarehouses() =
-    warehouseDao.getAllWarehouses()
+    // المخازن النشطة لشاشات الإدخال
+    fun getAllWarehouses() =
+        warehouseDao.getAllWarehouses()
 
-suspend fun getWarehouseById(id: Long) =
-    warehouseDao.getWarehouseById(id)
+    // جميع المخازن للتقارير والسجل التاريخي
+    fun getAllWarehousesIncludingInactive() =
+        warehouseDao.getAllWarehousesIncludingInactive()
 
-suspend fun insertWarehouse(
-    warehouse: WarehouseEntity
-): Long {
-    return warehouseDao.insertWarehouse(warehouse)
-}
+    suspend fun getWarehouseById(id: Long) =
+        warehouseDao.getWarehouseById(id)
 
-suspend fun updateWarehouse(
-    warehouse: WarehouseEntity
-) {
-    warehouseDao.updateWarehouse(warehouse)
-}
+    suspend fun insertWarehouse(
+        warehouse: WarehouseEntity
+    ): Long {
+        return warehouseDao.insertWarehouse(warehouse)
+    }
 
-suspend fun deactivateWarehouse(id: Long): Boolean {
-    val affectedRows = warehouseDao.deactivateWarehouse(id)
-    return affectedRows > 0
-}
+    suspend fun updateWarehouse(
+        warehouse: WarehouseEntity
+    ) {
+        warehouseDao.updateWarehouse(warehouse)
+    }
 
+    suspend fun deactivateWarehouse(id: Long): Boolean {
+        val affectedRows = warehouseDao.deactivateWarehouse(id)
+        return affectedRows > 0
+    }
 }
