@@ -116,7 +116,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     }
                 )
 
-                "movements" -> StockMovementsScreen(
+                "movements", "returns" -> StockMovementsScreen(
                     itemRepository = itemRepository,
                     warehouseRepository = warehouseRepository,
                     movementRepository = movementRepository,
@@ -193,7 +193,10 @@ fun BravoWarehouseApp(database: AppDatabase) {
                             "التحويلات" ->
                                 currentScreen = "transfers"
 
-                            "المرتجعات", "الجرد", "التقارير" ->
+                            "المرتجعات" ->
+                                currentScreen = "returns"
+
+                            "الجرد", "التقارير" ->
                                 unavailableFeature = title
                         }
                     }
@@ -211,8 +214,7 @@ fun BravoWarehouseApp(database: AppDatabase) {
                     },
                     text = {
                         Text(
-                            "قسم ${unavailableFeature} لم يتم تفعيله بعد. " +
-                            "سيتم تجهيزه وربطه بقاعدة بيانات المخزون."
+                            "قسم ${unavailableFeature} لم يتم تفعيله بعد."
                         )
                     },
                     confirmButton = {
