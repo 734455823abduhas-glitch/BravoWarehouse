@@ -6,12 +6,20 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -294,6 +302,102 @@ object ReportExportUtils {
 
         context.startActivity(
             Intent.createChooser(intent, "معاينة التقرير")
+        )
+    }
+
+    fun printPdf(context: Context, file: File) {
+
+        require(file.exists() && file.extension.equals("pdf", true)) {
+            "ملف PDF غير موجود أو غير صالح"
+        }
+
+        val printManager = context.getSystemService(
+            Context.PRINT_SERVICE
+        ) as PrintManager
+
+        val printAdapter = object : PrintDocumentAdapter() {
+
+            override fun onLayout(
+                oldAttributes: PrintAttributes?,
+                newAttributes: PrintAttributes?,
+                cancellationSignal: CancellationSignal?,
+                callback: LayoutResultCallback?,
+                extras: android.os.Bundle?
+            ) {
+                if (cancellationSignal?.isCanceled == true) {
+                    callback?.onLayoutCancelled()
+                    return
+                }
+
+                val info = PrintDocumentInfo.Builder(file.name)
+                    .setContentType(
+                        PrintDocumentInfo.CONTENT_TYPE_DOCUMENT
+                    )
+                    .setPageCount(
+                        PrintDocumentInfo.PAGE_COUNT_UNKNOWN
+                    )
+                    .build()
+
+                callback?.onLayoutFinished(info, true)
+            }
+
+            override fun onWrite(
+                pages: Array<out PageRange>?,
+                destination: ParcelFileDescriptor?,
+                cancellationSignal: CancellationSignal?,
+                callback: WriteResultCallback?
+            ) {
+                if (destination == null) {
+                    callback?.onWriteFailed("وجهة الطباعة غير متاحة")
+                    return
+                }
+
+                if (cancellationSignal?.isCanceled == true) {
+                    callback?.onWriteCancelled()
+                    return
+                }
+
+                try {
+                    FileInputStream(file).use { input ->
+                        FileOutputStream(
+                            destination.fileDescriptor
+                        ).use { output ->
+
+                            val buffer = ByteArray(8192)
+
+                            while (true) {
+                                if (cancellationSignal?.isCanceled == true) {
+                                    callback?.onWriteCancelled()
+                                    return
+                                }
+
+                                val count = input.read(buffer)
+
+                                if (count == -1) break
+
+                                output.write(buffer, 0, count)
+                            }
+
+                            output.flush()
+                        }
+                    }
+
+                    callback?.onWriteFinished(
+                        arrayOf(PageRange.ALL_PAGES)
+                    )
+
+                } catch (e: Exception) {
+                    callback?.onWriteFailed(
+                        e.message ?: "تعذرت قراءة ملف PDF"
+                    )
+                }
+            }
+        }
+
+        printManager.print(
+            safeName(file.nameWithoutExtension),
+            printAdapter,
+            PrintAttributes.Builder().build()
         )
     }
 
