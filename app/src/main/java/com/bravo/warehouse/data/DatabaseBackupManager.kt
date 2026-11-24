@@ -18,9 +18,9 @@ suspend fun exportBackup(
 
     val database = DatabaseProvider.getDatabase(context)
 
-    database.openHelper.writableDatabase.query(
-        "PRAGMA wal_checkpoint(FULL)"
-    ).use { }
+    database.openHelper.writableDatabase
+        .query("PRAGMA wal_checkpoint(FULL)")
+        .use { }
 
     DatabaseProvider.closeDatabase()
 
@@ -28,7 +28,7 @@ suspend fun exportBackup(
         val databaseFile =
             context.getDatabasePath(AppDatabase.DATABASE_NAME)
 
-        require(databaseFile.exists()) {
+        check(databaseFile.exists()) {
             "Database file not found"
         }
 
@@ -52,10 +52,11 @@ suspend fun importBackup(
     val databaseFile =
         context.getDatabasePath(AppDatabase.DATABASE_NAME)
 
-    val temporaryFile = File(
-        databaseFile.parentFile,
-        "bravo_restore_temp.db"
-    )
+    val directory = databaseFile.parentFile
+        ?: error("Database directory not found")
+
+    val temporaryFile = File(directory, "bravo_restore_temp.db")
+    val rollbackFile = File(directory, "bravo_restore_previous.db")
 
     try {
         context.contentResolver.openInputStream(source)?.use {
@@ -72,20 +73,41 @@ suspend fun importBackup(
         File(databaseFile.absolutePath + "-wal").delete()
         File(databaseFile.absolutePath + "-shm").delete()
 
+        rollbackFile.delete()
+
         if (databaseFile.exists()) {
-            check(databaseFile.delete()) {
-                "Cannot replace current database"
+            check(databaseFile.renameTo(rollbackFile)) {
+                "Cannot protect current database"
             }
         }
 
-        check(temporaryFile.renameTo(databaseFile)) {
-            "Cannot restore database"
-        }
+        try {
+            check(temporaryFile.renameTo(databaseFile)) {
+                "Cannot install backup database"
+            }
 
-        DatabaseProvider.getDatabase(context)
+            DatabaseProvider.getDatabase(context)
+
+            rollbackFile.delete()
+
+        } catch (error: Exception) {
+            DatabaseProvider.closeDatabase()
+            databaseFile.delete()
+
+            if (rollbackFile.exists()) {
+                rollbackFile.renameTo(databaseFile)
+            }
+
+            throw error
+        }
 
     } catch (error: Exception) {
         temporaryFile.delete()
+
+        if (!databaseFile.exists() && rollbackFile.exists()) {
+            rollbackFile.renameTo(databaseFile)
+        }
+
         throw error
     }
 }
@@ -103,12 +125,10 @@ private fun validateBackup(file: File) {
             "PRAGMA integrity_check",
             null
         ).use { cursor ->
-
-            check(cursor.moveToFirst()) {
-                "Invalid backup database"
-            }
-
-            check(cursor.getString(0) == "ok") {
+            check(
+                cursor.moveToFirst() &&
+                cursor.getString(0) == "ok"
+            ) {
                 "Backup database is damaged"
             }
         }
@@ -117,13 +137,29 @@ private fun validateBackup(file: File) {
             "PRAGMA user_version",
             null
         ).use { cursor ->
-
-            check(cursor.moveToFirst()) {
-                "Cannot read database version"
-            }
-
-            check(cursor.getInt(0) == DATABASE_VERSION) {
+            check(
+                cursor.moveToFirst() &&
+                cursor.getInt(0) == DATABASE_VERSION
+            ) {
                 "Backup version is not supported"
+            }
+        }
+
+        val requiredTables = listOf(
+            "items",
+            "warehouses",
+            "stock_movements",
+            "stock_transfers"
+        )
+
+        for (table in requiredTables) {
+            database.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf(table)
+            ).use { cursor ->
+                check(cursor.moveToFirst()) {
+                    "Missing table: $table"
+                }
             }
         }
 
