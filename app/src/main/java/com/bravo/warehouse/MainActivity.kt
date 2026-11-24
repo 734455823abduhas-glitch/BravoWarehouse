@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,11 +61,6 @@ override fun onCreate(savedInstanceState: Bundle?) {
 private val Navy = Color(0xFF17365D)
 private val Background = Color(0xFFF4F6FA)
 private val Green = Color(0xFF238B65)
-
-// توحيد عائلة الخطوط مع دعم العربية عبر خطوط Android Sans Serif.
-private val AppTypography = Typography(
-defaultFontFamily = FontFamily.SansSerif
-)
 
 @Composable
 fun BravoWarehouseApp(
@@ -154,159 +150,166 @@ CompositionLocalProvider(
             primary = Navy,
             secondary = Green,
             background = Background
-        ),
-        typography = AppTypography
+        )
     ) {
-
-        when (currentScreen) {
-
-            "items" -> ItemsScreen(
-                repository = itemRepository,
-                onBack = {
-                    currentScreen = "dashboard"
-                }
+        CompositionLocalProvider(
+            LocalTextStyle provides TextStyle(
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 16.sp,
+                lineHeight = 24.sp
             )
+        ) {
 
-            "warehouses" -> WarehouseScreen(
-                repository = warehouseRepository,
-                onBack = {
-                    currentScreen = "dashboard"
-                }
-            )
+            when (currentScreen) {
 
-            "movements", "returns" -> StockMovementsScreen(
-                itemRepository = itemRepository,
-                warehouseRepository = warehouseRepository,
-                movementRepository = movementRepository,
-                onBack = {
-                    currentScreen = "dashboard"
-                }
-            )
+                "items" -> ItemsScreen(
+                    repository = itemRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
 
-            "stocktaking" -> StocktakingScreen(
-                itemRepository = itemRepository,
-                warehouseRepository = warehouseRepository,
-                movementRepository = movementRepository,
-                onBack = {
-                    currentScreen = "dashboard"
-                }
-            )
+                "warehouses" -> WarehouseScreen(
+                    repository = warehouseRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
 
-            "reports" -> ReportsScreen(
-                itemRepository = itemRepository,
-                warehouseRepository = warehouseRepository,
-                movementRepository = movementRepository,
-                transferRepository = transferRepository,
-                onBack = {
-                    currentScreen = "dashboard"
-                }
-            )
+                "movements", "returns" -> StockMovementsScreen(
+                    itemRepository = itemRepository,
+                    warehouseRepository = warehouseRepository,
+                    movementRepository = movementRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
 
-            "backup" -> BackupScreen(
-                onBack = {
-                    currentScreen = "dashboard"
-                },
-                onRestoreComplete = onRestoreComplete
-            )
+                "stocktaking" -> StocktakingScreen(
+                    itemRepository = itemRepository,
+                    warehouseRepository = warehouseRepository,
+                    movementRepository = movementRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
 
-            "settings" -> SettingsScreen(
-                itemCount = items.size,
-                warehouseCount = warehouses.size,
-                warehouses = warehouses,
-                onBack = {
-                    currentScreen = "dashboard"
-                },
-                onBackupClick = {
-                    currentScreen = "backup"
-                }
-            )
+                "reports" -> ReportsScreen(
+                    itemRepository = itemRepository,
+                    warehouseRepository = warehouseRepository,
+                    movementRepository = movementRepository,
+                    transferRepository = transferRepository,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    }
+                )
 
-            "transfers" -> {
+                "backup" -> BackupScreen(
+                    onBack = {
+                        currentScreen = "dashboard"
+                    },
+                    onRestoreComplete = onRestoreComplete
+                )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
-                ) {
+                "settings" -> SettingsScreen(
+                    itemCount = items.size,
+                    warehouseCount = warehouses.size,
+                    warehouses = warehouses,
+                    onBack = {
+                        currentScreen = "dashboard"
+                    },
+                    onBackupClick = {
+                        currentScreen = "backup"
+                    }
+                )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                "transfers" -> {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
                     ) {
 
-                        TextButton(
-                            onClick = {
-                                currentScreen = "dashboard"
-                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+
+                            TextButton(
+                                onClick = {
+                                    currentScreen = "dashboard"
+                                }
+                            ) {
+                                Text(
+                                    text = "رجوع ←",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
                             Text(
-                                text = "رجوع ←",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "التحويلات بين المخازن",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Navy
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        HorizontalDivider()
 
-                        Text(
-                            text = "التحويلات بين المخازن",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Navy
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    Box(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        TransferScreen(
-                            items = items,
-                            warehouses = warehouses,
-                            transferRepository = transferRepository
-                        )
+                        Box(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TransferScreen(
+                                items = items,
+                                warehouses = warehouses,
+                                transferRepository = transferRepository
+                            )
+                        }
                     }
                 }
+
+                else -> DashboardScreen(
+                    itemCount = items.size,
+                    warehouseCount = warehouses.size,
+                    alertCount = lowStockCount,
+                    onMenuClick = { title ->
+
+                        when (title) {
+
+                            "الأصناف" ->
+                                currentScreen = "items"
+
+                            "المخازن" ->
+                                currentScreen = "warehouses"
+
+                            "الوارد", "المنصرف" ->
+                                currentScreen = "movements"
+
+                            "التحويلات" ->
+                                currentScreen = "transfers"
+
+                            "المرتجعات" ->
+                                currentScreen = "returns"
+
+                            "الجرد" ->
+                                currentScreen = "stocktaking"
+
+                            "التقارير" ->
+                                currentScreen = "reports"
+
+                            "النسخ الاحتياطي" ->
+                                currentScreen = "backup"
+
+                            "الإعدادات" ->
+                                currentScreen = "settings"
+                        }
+                    }
+                )
             }
-
-            else -> DashboardScreen(
-                itemCount = items.size,
-                warehouseCount = warehouses.size,
-                alertCount = lowStockCount,
-                onMenuClick = { title ->
-
-                    when (title) {
-
-                        "الأصناف" ->
-                            currentScreen = "items"
-
-                        "المخازن" ->
-                            currentScreen = "warehouses"
-
-                        "الوارد", "المنصرف" ->
-                            currentScreen = "movements"
-
-                        "التحويلات" ->
-                            currentScreen = "transfers"
-
-                        "المرتجعات" ->
-                            currentScreen = "returns"
-
-                        "الجرد" ->
-                            currentScreen = "stocktaking"
-
-                        "التقارير" ->
-                            currentScreen = "reports"
-
-                        "النسخ الاحتياطي" ->
-                            currentScreen = "backup"
-
-                        "الإعدادات" ->
-                            currentScreen = "settings"
-                    }
-                }
-            )
         }
     }
 }
@@ -458,7 +461,8 @@ Column(
     Text(
         text = title,
         color = Color.White.copy(alpha = 0.85f),
-        fontSize = 11.sp,
+        fontSize = 12.sp,
+        lineHeight = 18.sp,
         textAlign = TextAlign.Center
     )
 }
