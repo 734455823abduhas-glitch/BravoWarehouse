@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.bravo.warehouse.data.entity.StockMovementEntity
 import com.bravo.warehouse.data.repository.ItemRepository
@@ -23,6 +24,11 @@ movementRepository: StockMovementRepository,
 onBack: () -> Unit
 ) {
 val scope = rememberCoroutineScope()
+val context = LocalContext.current
+
+val preferences = remember {
+    context.getSharedPreferences("bravo_settings", android.content.Context.MODE_PRIVATE)
+}
 
 val itemList by itemRepository.getAllItems()
     .collectAsState(initial = emptyList())
@@ -35,7 +41,14 @@ val movementList by movementRepository.getAllMovements()
 
 var movementType by remember { mutableStateOf("IN") }
 var selectedItemId by remember { mutableStateOf<Long?>(null) }
-var selectedWarehouseId by remember { mutableStateOf<Long?>(null) }
+
+var selectedWarehouseId by remember {
+    mutableStateOf(
+        preferences.getLong("default_warehouse_id", 0L)
+            .takeIf { it > 0L }
+    )
+}
+
 var quantity by remember { mutableStateOf("") }
 var notes by remember { mutableStateOf("") }
 
@@ -268,12 +281,15 @@ Column(
         onClick = {
             val qty = quantity.toDoubleOrNull()
 
-            if (selectedItemId == null) {
+            val itemId = selectedItemId
+            val warehouseId = selectedWarehouseId
+
+            if (itemId == null) {
                 message = "يرجى اختيار الصنف"
                 return@Button
             }
 
-            if (selectedWarehouseId == null) {
+            if (warehouseId == null) {
                 message = "يرجى اختيار المخزن"
                 return@Button
             }
@@ -293,8 +309,8 @@ Column(
                     val movement = StockMovementEntity(
                         documentNumber = "MOV-${System.currentTimeMillis()}",
                         movementType = movementType,
-                        itemId = selectedItemId!!,
-                        warehouseId = selectedWarehouseId!!,
+                        itemId = itemId,
+                        warehouseId = warehouseId,
                         quantity = qty,
                         notes = notes.trim(),
                         isApproved = false
@@ -309,8 +325,8 @@ Column(
 
                     currentBalance =
                         movementRepository.getCurrentBalance(
-                            selectedItemId!!,
-                            selectedWarehouseId!!
+                            itemId,
+                            warehouseId
                         )
 
                 } catch (e: Exception) {
