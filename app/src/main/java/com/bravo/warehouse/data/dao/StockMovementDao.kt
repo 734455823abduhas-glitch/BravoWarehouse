@@ -22,6 +22,12 @@ fun getMovementsByItem(itemId: Long): Flow<List<StockMovementEntity>>
 @Query("SELECT * FROM stock_movements WHERE warehouseId = :warehouseId ORDER BY movementDate DESC")
 fun getMovementsByWarehouse(warehouseId: Long): Flow<List<StockMovementEntity>>
 
+@Query("SELECT isActive FROM items WHERE id = :itemId LIMIT 1")
+suspend fun isItemActive(itemId: Long): Boolean?
+
+@Query("SELECT isActive FROM warehouses WHERE id = :warehouseId LIMIT 1")
+suspend fun isWarehouseActive(warehouseId: Long): Boolean?
+
 @Insert
 suspend fun insertMovement(movement: StockMovementEntity): Long
 
@@ -72,6 +78,14 @@ suspend fun approveMovementSafely(
         return false
     }
 
+    if (isItemActive(movement.itemId) != true) {
+        return false
+    }
+
+    if (isWarehouseActive(movement.warehouseId) != true) {
+        return false
+    }
+
     val incomingTypes = listOf(
         "IN",
         "RETURN_IN",
@@ -92,7 +106,6 @@ suspend fun approveMovementSafely(
     }
 
     if (movement.movementType in outgoingTypes) {
-
         val incoming = getTotalIncoming(
             movement.itemId,
             movement.warehouseId
@@ -137,6 +150,14 @@ suspend fun insertAndApproveMovementSafely(
 
     require(movement.movementType in validTypes) {
         "Invalid movement type"
+    }
+
+    require(isItemActive(movement.itemId) == true) {
+        "Item is inactive or does not exist"
+    }
+
+    require(isWarehouseActive(movement.warehouseId) == true) {
+        "Warehouse is inactive or does not exist"
     }
 
     val movementId = insertMovement(movement)
