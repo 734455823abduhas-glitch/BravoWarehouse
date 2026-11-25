@@ -293,4 +293,108 @@ suspend fun insertAndApproveMovementsSafely(
     return ids
 }
 
+/**
+ * اعتماد تسويات الجرد متعددة الأصناف.
+ * يسمح بوجود زيادة وعجز في المستند نفسه.
+ * جميع التسويات تنفذ داخل معاملة واحدة.
+ */
+@Transaction
+suspend fun insertAndApproveStocktakingSafely(
+    movements: List<StockMovementEntity>
+): List<Long> {
+
+    require(movements.isNotEmpty()) {
+        "Stocktaking document cannot be empty"
+    }
+
+    require(movements.all { !it.isApproved }) {
+        "All movements must be unapproved"
+    }
+
+    val documentNumber = movements.first().documentNumber.trim()
+    val warehouseId = movements.first().warehouseId
+
+    require(documentNumber.isNotBlank()) {
+        "Document number is required"
+    }
+
+    require(movements.all {
+        it.documentNumber.trim() == documentNumber
+    }) {
+        "Document numbers must match"
+    }
+
+    require(countByDocumentNumber(documentNumber) == 0) {
+        "Document number already exists"
+    }
+
+    require(movements.all {
+        it.warehouseId == warehouseId
+    }) {
+        "All items must belong to the same warehouse"
+    }
+
+    require(movements.map { it.itemId }.distinct().size == movements.size) {
+        "Duplicate items are not allowed"
+    }
+
+    require(movements.all {
+        it.movementType in listOf(
+            "ADJUSTMENT_IN",
+            "ADJUSTMENT_OUT"
+        )
+    }) {
+        "Only stock adjustment movements are allowed"
+    }
+
+    require(movements.all {
+        it.quantity.isFinite() && it.quantity > 0
+    }) {
+        "Invalid adjustment quantity"
+    }
+
+    for (movement in movements) {
+        require(isItemActive(movement.itemId) == true) {
+            "Item ${movement.itemId} is inactive or does not exist"
+        }
+
+        require(isWarehouseActive(movement.warehouseId) == true) {
+            "Warehouse ${movement.warehouseId} is inactive or does not exist"
+        }
+
+        if (movement.movementType == "ADJUSTMENT_OUT") {
+            val balance = getTotalIncoming(
+                movement.itemId,
+                warehouseId
+            ) - getTotalOutgoing(
+                movement.itemId,
+                warehouseId
+            )
+
+            require(movement.quantity <= balance + 0.000001) {
+                "Insufficient stock for item ${movement.itemId}"
+            }
+        }
+    }
+
+    val ids = mutableListOf<Long>()
+
+    for (movement in movements) {
+        val normalizedMovement = movement.copy(
+            documentNumber = documentNumber,
+            notes = movement.notes.trim()
+        )
+
+        val id = insertMovement(normalizedMovement)
+
+        check(approveMovement(id) == 1) {
+            "Stocktaking approval failed"
+        }
+
+        ids.add(id)
+    }
+
+    return ids
+}
+
 }
