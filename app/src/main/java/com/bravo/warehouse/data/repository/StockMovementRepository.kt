@@ -76,8 +76,7 @@ suspend fun insertAndApproveMovement(
 }
 
 /**
- * اعتماد جميع أصناف المستند كوحدة واحدة.
- * لا يتم اعتماد أي صنف إذا فشل التحقق من أحد الأصناف.
+ * اعتماد جميع أصناف مستند الصرف أو التوريد كوحدة واحدة.
  */
 suspend fun insertAndApproveMovements(
     movements: List<StockMovementEntity>
@@ -136,11 +135,75 @@ suspend fun insertAndApproveMovements(
         movement.copy(
             documentNumber = documentNumber,
             recipientName = movement.recipientName.trim(),
-            department = movement.department.trim()
+            department = movement.department.trim(),
+            notes = movement.notes.trim()
         )
     }
 
     stockMovementDao.insertAndApproveMovementsSafely(
+        normalizedMovements
+    )
+}
+
+/**
+ * اعتماد تسويات الجرد متعددة الأصناف.
+ * يسمح بوجود زيادة وعجز في المستند نفسه.
+ * ترجع أرقام الحركات التي تم اعتمادها.
+ */
+suspend fun insertAndApproveStocktaking(
+    movements: List<StockMovementEntity>
+): List<Long> {
+    require(movements.isNotEmpty()) {
+        "Stocktaking document cannot be empty"
+    }
+
+    val documentNumber = movements.first().documentNumber.trim()
+    val warehouseId = movements.first().warehouseId
+
+    require(documentNumber.isNotBlank()) {
+        "Document number is required"
+    }
+
+    require(movements.all { !it.isApproved }) {
+        "Stocktaking movements must be unapproved"
+    }
+
+    require(movements.all {
+        it.documentNumber.trim() == documentNumber
+    }) {
+        "Document numbers must match"
+    }
+
+    require(movements.all {
+        it.warehouseId == warehouseId
+    }) {
+        "All items must belong to the same warehouse"
+    }
+
+    require(movements.all {
+        it.movementType in setOf("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
+    }) {
+        "Only stock adjustment movements are allowed"
+    }
+
+    require(movements.all {
+        it.quantity.isFinite() && it.quantity > 0
+    }) {
+        "Invalid stocktaking quantity"
+    }
+
+    require(movements.map { it.itemId }.distinct().size == movements.size) {
+        "Duplicate items are not allowed"
+    }
+
+    val normalizedMovements = movements.map { movement ->
+        movement.copy(
+            documentNumber = documentNumber,
+            notes = movement.notes.trim()
+        )
+    }
+
+    return stockMovementDao.insertAndApproveStocktakingSafely(
         normalizedMovements
     )
 }
