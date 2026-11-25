@@ -1,76 +1,148 @@
 package com.bravo.warehouse.data.repository
 
+import androidx.room.withTransaction
 import com.bravo.warehouse.data.dao.StockMovementDao
 import com.bravo.warehouse.data.entity.StockMovementEntity
 
 class StockMovementRepository(
-private val stockMovementDao: StockMovementDao
+    private val stockMovementDao: StockMovementDao
 ) {
 
-fun getAllMovements() =
-    stockMovementDao.getAllMovements()
+    fun getAllMovements() =
+        stockMovementDao.getAllMovements()
 
-fun getMovementsByItem(itemId: Long) =
-    stockMovementDao.getMovementsByItem(itemId)
+    fun getMovementsByItem(itemId: Long) =
+        stockMovementDao.getMovementsByItem(itemId)
 
-fun getMovementsByWarehouse(warehouseId: Long) =
-    stockMovementDao.getMovementsByWarehouse(warehouseId)
+    fun getMovementsByWarehouse(warehouseId: Long) =
+        stockMovementDao.getMovementsByWarehouse(warehouseId)
 
-suspend fun getMovementById(id: Long) =
-    stockMovementDao.getMovementById(id)
+    suspend fun getMovementById(id: Long) =
+        stockMovementDao.getMovementById(id)
 
-suspend fun insertMovement(movement: StockMovementEntity): Long {
+    suspend fun insertMovement(
+        movement: StockMovementEntity
+    ): Long {
 
-    require(!movement.isApproved) {
-        "Approved movements must use the safe approval method"
+        require(!movement.isApproved) {
+            "Approved movements must use the safe approval method"
+        }
+
+        require(movement.quantity.isFinite() && movement.quantity > 0) {
+            "Quantity must be greater than zero"
+        }
+
+        require(
+            movement.movementType in listOf(
+                "IN",
+                "OUT",
+                "RETURN_IN",
+                "RETURN_OUT",
+                "ADJUSTMENT_IN",
+                "ADJUSTMENT_OUT"
+            )
+        ) {
+            "Invalid movement type"
+        }
+
+        return stockMovementDao.insertMovement(movement)
     }
 
-    require(movement.quantity.isFinite() && movement.quantity > 0) {
-        "Quantity must be greater than zero"
+    suspend fun insertAndApproveMovement(
+        movement: StockMovementEntity
+    ): Long {
+        return stockMovementDao.insertAndApproveMovementSafely(movement)
     }
 
-    require(
-        movement.movementType in listOf(
-            "IN",
-            "OUT",
-            "RETURN_IN",
-            "RETURN_OUT",
-            "ADJUSTMENT_IN",
-            "ADJUSTMENT_OUT"
+    /**
+     * اعتماد عدة حركات في مستند واحد.
+     * يجب أن تكون جميع الحركات من النوع والمخزن والمستند نفسه.
+     */
+    suspend fun insertAndApproveMovements(
+        movements: List<StockMovementEntity>
+    ): List<Long> {
+
+        require(movements.isNotEmpty()) {
+            "Movement document cannot be empty"
+        }
+
+        require(movements.all { !it.isApproved }) {
+            "Movements must be unapproved"
+        }
+
+        require(movements.all {
+            it.quantity.isFinite() && it.quantity > 0
+        }) {
+            "Invalid movement quantity"
+        }
+
+        require(movements.all {
+            it.movementType == movements.first().movementType
+        }) {
+            "Movement types must match"
+        }
+
+        require(movements.all {
+            it.warehouseId == movements.first().warehouseId
+        }) {
+            "Warehouse must match"
+        }
+
+        require(movements.all {
+            it.documentNumber.trim() == movements.first().documentNumber.trim()
+        }) {
+            "Document numbers must match"
+        }
+
+        require(movements.first().documentNumber.isNotBlank()) {
+            "Document number is required"
+        }
+
+        require(
+            movements.map { it.itemId }.distinct().size == movements.size
+        ) {
+            "Duplicate items are not allowed"
+        }
+
+        require(
+            movements.all {
+                it.movementType in listOf(
+                    "IN",
+                    "OUT",
+                    "RETURN_IN",
+                    "RETURN_OUT",
+                    "ADJUSTMENT_IN",
+                    "ADJUSTMENT_OUT"
+                )
+            }
+        ) {
+            "Invalid movement type"
+        }
+
+        stockMovementDao.insertAndApproveMovementsSafely(movements)
+
+        return emptyList()
+    }
+
+    suspend fun approveMovement(id: Long): Boolean {
+        return stockMovementDao.approveMovementSafely(id)
+    }
+
+    suspend fun getCurrentBalance(
+        itemId: Long,
+        warehouseId: Long
+    ): Double {
+
+        val incoming = stockMovementDao.getTotalIncoming(
+            itemId,
+            warehouseId
         )
-    ) {
-        "Invalid movement type"
+
+        val outgoing = stockMovementDao.getTotalOutgoing(
+            itemId,
+            warehouseId
+        )
+
+        return incoming - outgoing
     }
-
-    return stockMovementDao.insertMovement(movement)
-}
-
-suspend fun insertAndApproveMovement(
-    movement: StockMovementEntity
-): Long {
-    return stockMovementDao.insertAndApproveMovementSafely(movement)
-}
-
-suspend fun approveMovement(id: Long): Boolean {
-    return stockMovementDao.approveMovementSafely(id)
-}
-
-suspend fun getCurrentBalance(
-    itemId: Long,
-    warehouseId: Long
-): Double {
-
-    val incoming = stockMovementDao.getTotalIncoming(
-        itemId,
-        warehouseId
-    )
-
-    val outgoing = stockMovementDao.getTotalOutgoing(
-        itemId,
-        warehouseId
-    )
-
-    return incoming - outgoing
-}
-
 }
