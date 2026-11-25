@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "stock_transfers",
     indices = [
-        Index(value = ["transferNumber"], unique = true),
+        Index(value = ["transferNumber"]),
         Index(value = ["itemId"]),
         Index(value = ["sourceWarehouseId"]),
         Index(value = ["destinationWarehouseId"])
