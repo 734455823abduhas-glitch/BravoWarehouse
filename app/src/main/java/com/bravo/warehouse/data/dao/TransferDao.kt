@@ -14,6 +14,30 @@ interface TransferDao {
     )
     fun getAllTransfers(): Flow<List<TransferEntity>>
 
+    // جلب جميع أصناف مستند تحويل محدد
+    @Query(
+        """
+        SELECT * FROM stock_transfers
+        WHERE transferNumber = :number
+        ORDER BY id ASC
+        """
+    )
+    suspend fun getTransfersByNumber(
+        number: String
+    ): List<TransferEntity>
+
+    // متابعة أصناف مستند التحويل مباشرة
+    @Query(
+        """
+        SELECT * FROM stock_transfers
+        WHERE transferNumber = :number
+        ORDER BY id ASC
+        """
+    )
+    fun observeTransfersByNumber(
+        number: String
+    ): Flow<List<TransferEntity>>
+
     @Query(
         "SELECT * FROM stock_transfers WHERE id = :transferId LIMIT 1"
     )
