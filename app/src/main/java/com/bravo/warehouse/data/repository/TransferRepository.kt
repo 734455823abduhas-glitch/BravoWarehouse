@@ -5,150 +5,178 @@ import com.bravo.warehouse.data.AppDatabase
 import com.bravo.warehouse.data.entity.StockMovementEntity
 import com.bravo.warehouse.data.entity.TransferEntity
 
+data class TransferLine(
+    val itemId: Long,
+    val quantity: Double
+)
+
 class TransferRepository(
-private val database: AppDatabase
+    private val database: AppDatabase
 ) {
 
-fun getAllTransfers() =
-    database.transferDao().getAllTransfers()
+    fun getAllTransfers() =
+        database.transferDao().getAllTransfers()
 
-suspend fun createTransfer(
-    transferNumber: String,
-    itemId: Long,
-    sourceWarehouseId: Long,
-    destinationWarehouseId: Long,
-    quantity: Double,
-    notes: String = "",
-    createdBy: String = ""
-): Long {
-
-    val cleanNumber = transferNumber.trim()
-    val cleanNotes = notes.trim()
-
-    require(cleanNumber.isNotBlank()) {
-        "Transfer number is required"
+    suspend fun createTransfer(
+        transferNumber: String,
+        itemId: Long,
+        sourceWarehouseId: Long,
+        destinationWarehouseId: Long,
+        quantity: Double,
+        notes: String = "",
+        createdBy: String = ""
+    ): Long {
+        return createTransfers(
+            transferNumber = transferNumber,
+            lines = listOf(TransferLine(itemId, quantity)),
+            sourceWarehouseId = sourceWarehouseId,
+            destinationWarehouseId = destinationWarehouseId,
+            notes = notes,
+            createdBy = createdBy
+        )
     }
 
-    require(itemId > 0) {
-        "Invalid item"
-    }
+    suspend fun createTransfers(
+        transferNumber: String,
+        lines: List<TransferLine>,
+        sourceWarehouseId: Long,
+        destinationWarehouseId: Long,
+        notes: String = "",
+        createdBy: String = ""
+    ): Long {
 
-    require(sourceWarehouseId > 0 && destinationWarehouseId > 0) {
-        "Invalid warehouse"
-    }
+        val cleanNumber = transferNumber.trim()
+        val cleanNotes = notes.trim()
 
-    require(sourceWarehouseId != destinationWarehouseId) {
-        "Source and destination must be different"
-    }
-
-    require(quantity.isFinite() && quantity > 0) {
-        "Quantity must be greater than zero"
-    }
-
-    return database.withTransaction {
-
-        val transferDao = database.transferDao()
-        val movementDao = database.stockMovementDao()
-        val itemDao = database.itemDao()
-        val warehouseDao = database.warehouseDao()
-
-        val item = itemDao.getItemById(itemId)
-
-        check(item != null && item.isActive) {
-            "Item does not exist or is inactive"
+        require(cleanNumber.isNotBlank()) {
+            "Transfer number is required"
         }
 
-        val sourceWarehouse =
-            warehouseDao.getWarehouseById(sourceWarehouseId)
-
-        check(sourceWarehouse != null && sourceWarehouse.isActive) {
-            "Source warehouse does not exist or is inactive"
+        require(lines.isNotEmpty()) {
+            "Transfer must contain at least one item"
         }
 
-        val destinationWarehouse =
-            warehouseDao.getWarehouseById(destinationWarehouseId)
-
-        check(
-            destinationWarehouse != null &&
-            destinationWarehouse.isActive
-        ) {
-            "Destination warehouse does not exist or is inactive"
+        require(sourceWarehouseId > 0 && destinationWarehouseId > 0) {
+            "Invalid warehouse"
         }
 
-        check(
-            transferDao.countByTransferNumber(cleanNumber) == 0
-        ) {
-            "Transfer number already exists"
+        require(sourceWarehouseId != destinationWarehouseId) {
+            "Source and destination must be different"
         }
 
-        val incoming = movementDao.getTotalIncoming(
-            itemId,
-            sourceWarehouseId
-        )
-
-        val outgoing = movementDao.getTotalOutgoing(
-            itemId,
-            sourceWarehouseId
-        )
-
-        val balance = incoming - outgoing
-
-        check(quantity <= balance + 0.000001) {
-            "Insufficient stock in source warehouse"
+        require(lines.all {
+            it.itemId > 0 && it.quantity.isFinite() && it.quantity > 0
+        }) {
+            "Invalid item or quantity"
         }
 
-        val now = System.currentTimeMillis()
+        require(lines.map { it.itemId }.distinct().size == lines.size) {
+            "Duplicate items are not allowed"
+        }
 
-        val transferId = transferDao.insertTransfer(
-            TransferEntity(
-                transferNumber = cleanNumber,
-                itemId = itemId,
-                sourceWarehouseId = sourceWarehouseId,
-                destinationWarehouseId = destinationWarehouseId,
-                quantity = quantity,
-                notes = cleanNotes,
-                transferDate = now,
-                createdAt = now,
-                isApproved = true
-            )
-        )
+        return database.withTransaction {
 
-        val outgoingMovement = StockMovementEntity(
-            documentNumber = cleanNumber,
-            movementType = "OUT",
-            itemId = itemId,
-            warehouseId = sourceWarehouseId,
-            quantity = quantity,
-            notes = "تحويل إلى المخزن رقم $destinationWarehouseId. $cleanNotes",
-            movementDate = now,
-            createdAt = now,
-            createdBy = createdBy,
-            isApproved = false
-        )
+            val transferDao = database.transferDao()
+            val movementDao = database.stockMovementDao()
+            val itemDao = database.itemDao()
+            val warehouseDao = database.warehouseDao()
 
-        movementDao.insertAndApproveMovementSafely(
-            outgoingMovement
-        )
+            check(transferDao.countByTransferNumber(cleanNumber) == 0) {
+                "Transfer number already exists"
+            }
 
-        val incomingMovement = StockMovementEntity(
-            documentNumber = cleanNumber,
-            movementType = "IN",
-            itemId = itemId,
-            warehouseId = destinationWarehouseId,
-            quantity = quantity,
-            notes = "تحويل من المخزن رقم $sourceWarehouseId. $cleanNotes",
-            movementDate = now,
-            createdAt = now,
-            createdBy = createdBy,
-            isApproved = false
-        )
+            val source = warehouseDao.getWarehouseById(sourceWarehouseId)
+            check(source != null && source.isActive) {
+                "Source warehouse does not exist or is inactive"
+            }
 
-        movementDao.insertAndApproveMovementSafely(
-            incomingMovement
-        )
+            val destination =
+                warehouseDao.getWarehouseById(destinationWarehouseId)
 
-        transferId
+            check(destination != null && destination.isActive) {
+                "Destination warehouse does not exist or is inactive"
+            }
+
+            // التحقق من جميع الأصناف والأرصدة قبل أي ترحيل
+            lines.forEach { line ->
+
+                val item = itemDao.getItemById(line.itemId)
+
+                check(item != null && item.isActive) {
+                    "Item ${line.itemId} does not exist or is inactive"
+                }
+
+                val incoming = movementDao.getTotalIncoming(
+                    line.itemId,
+                    sourceWarehouseId
+                )
+
+                val outgoing = movementDao.getTotalOutgoing(
+                    line.itemId,
+                    sourceWarehouseId
+                )
+
+                check(line.quantity <= incoming - outgoing + 0.000001) {
+                    "Insufficient stock for item ${line.itemId}"
+                }
+            }
+
+            val now = System.currentTimeMillis()
+
+            // حفظ تفاصيل المستند
+            val transferIds = lines.map { line ->
+                transferDao.insertTransfer(
+                    TransferEntity(
+                        transferNumber = cleanNumber,
+                        itemId = line.itemId,
+                        sourceWarehouseId = sourceWarehouseId,
+                        destinationWarehouseId = destinationWarehouseId,
+                        quantity = line.quantity,
+                        notes = cleanNotes,
+                        transferDate = now,
+                        createdAt = now,
+                        isApproved = true
+                    )
+                )
+            }
+
+            // تجهيز حركات الصرف
+            val outgoingMovements = lines.map { line ->
+                StockMovementEntity(
+                    documentNumber = cleanNumber,
+                    movementType = "OUT",
+                    itemId = line.itemId,
+                    warehouseId = sourceWarehouseId,
+                    quantity = line.quantity,
+                    notes = "تحويل إلى المخزن رقم $destinationWarehouseId. $cleanNotes",
+                    movementDate = now,
+                    createdAt = now,
+                    createdBy = createdBy,
+                    isApproved = false
+                )
+            }
+
+            // تجهيز حركات التوريد
+            val incomingMovements = lines.map { line ->
+                StockMovementEntity(
+                    documentNumber = cleanNumber,
+                    movementType = "IN",
+                    itemId = line.itemId,
+                    warehouseId = destinationWarehouseId,
+                    quantity = line.quantity,
+                    notes = "تحويل من المخزن رقم $sourceWarehouseId. $cleanNotes",
+                    movementDate = now,
+                    createdAt = now,
+                    createdBy = createdBy,
+                    isApproved = false
+                )
+            }
+
+            // اعتماد الحركات داخل المعاملة نفسها
+            movementDao.insertAndApproveMovementsSafely(outgoingMovements)
+            movementDao.insertAndApproveMovementsSafely(incomingMovements)
+
+            transferIds.first()
+        }
     }
-}
-
 }
