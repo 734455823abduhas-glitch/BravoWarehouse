@@ -81,7 +81,7 @@ interface StockMovementDao {
                 movement.itemId, movement.warehouseId
             )
 
-            if (movement.quantity > balance) return false
+            if (movement.quantity > balance + 0.000001) return false
         }
 
         return approveMovement(movementId) > 0
@@ -94,6 +94,7 @@ interface StockMovementDao {
         require(!movement.isApproved) {
             "Movement must be created as unapproved"
         }
+
         require(movement.quantity.isFinite() && movement.quantity > 0) {
             "Invalid movement quantity"
         }
@@ -106,26 +107,38 @@ interface StockMovementDao {
         require(movement.movementType in validTypes) {
             "Invalid movement type"
         }
+
         require(isItemActive(movement.itemId) == true) {
             "Item is inactive or does not exist"
         }
+
         require(isWarehouseActive(movement.warehouseId) == true) {
             "Warehouse is inactive or does not exist"
         }
 
-        val movementId = insertMovement(movement)
+        val outgoingTypes = listOf("OUT", "RETURN_OUT", "ADJUSTMENT_OUT")
 
-        check(approveMovementSafely(movementId)) {
+        if (movement.movementType in outgoingTypes) {
+            val balance = getTotalIncoming(
+                movement.itemId, movement.warehouseId
+            ) - getTotalOutgoing(
+                movement.itemId, movement.warehouseId
+            )
+
+            require(movement.quantity <= balance + 0.000001) {
+                "Insufficient stock"
+            }
+        }
+
+        val id = insertMovement(movement)
+
+        check(approveMovement(id) == 1) {
             "Movement approval failed"
         }
 
-        return movementId
+        return id
     }
 
-    /**
-     * اعتماد عدة أصناف في مستند واحد.
-     * أي فشل يؤدي إلى التراجع عن جميع الحركات.
-     */
     @Transaction
     suspend fun insertAndApproveMovementsSafely(
         movements: List<StockMovementEntity>
@@ -139,8 +152,8 @@ interface StockMovementDao {
             "All movements must be unapproved"
         }
 
-        require(movements.map { it.itemId }.distinct().size == movements.size) {
-            "Duplicate items are not allowed"
+        require(movements.all { it.documentNumber.isNotBlank() }) {
+            "Document number is required"
         }
 
         require(movements.map { it.documentNumber }.distinct().size == 1) {
@@ -149,6 +162,14 @@ interface StockMovementDao {
 
         require(movements.map { it.movementType }.distinct().size == 1) {
             "Movement types must be identical"
+        }
+
+        require(movements.map { it.itemId }.distinct().size == movements.size) {
+            "Duplicate items are not allowed"
+        }
+
+        require(movements.map { it.warehouseId }.distinct().size == 1) {
+            "All movements must belong to the same warehouse"
         }
 
         require(movements.all {
@@ -174,12 +195,13 @@ interface StockMovementDao {
             }
 
             require(isWarehouseActive(movement.warehouseId) == true) {
-                "Warehouse ${movement.warehouseId} is inactive or does not exist"
+                "Warehouse is inactive or does not exist"
             }
         }
 
         val outgoingTypes = listOf("OUT", "RETURN_OUT", "ADJUSTMENT_OUT")
 
+        // التحقق من أرصدة جميع الأصناف قبل إدخال أي حركة
         if (movementType in outgoingTypes) {
             for (movement in movements) {
                 val balance = getTotalIncoming(
@@ -188,16 +210,23 @@ interface StockMovementDao {
                     movement.itemId, movement.warehouseId
                 )
 
-                require(movement.quantity <= balance) {
+                require(movement.quantity <= balance + 0.000001) {
                     "Insufficient balance for item ${movement.itemId}"
                 }
             }
         }
 
+        // إدخال واعتماد جميع الحركات داخل المعاملة نفسها
         val ids = mutableListOf<Long>()
 
         for (movement in movements) {
-            ids.add(insertAndApproveMovementSafely(movement))
+            val id = insertMovement(movement)
+
+            check(approveMovement(id) == 1) {
+                "Movement approval failed"
+            }
+
+            ids.add(id)
         }
 
         return ids
