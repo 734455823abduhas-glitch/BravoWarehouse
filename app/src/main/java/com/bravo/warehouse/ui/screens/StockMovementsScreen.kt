@@ -69,9 +69,12 @@ fun StockMovementsScreen(
         )
     }
 
+    var documentNumber by remember {
+        mutableStateOf("MOV-${System.currentTimeMillis()}")
+    }
+
     var quantity by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-
     var recipientName by remember { mutableStateOf("") }
     var department by remember { mutableStateOf("") }
 
@@ -119,7 +122,9 @@ fun StockMovementsScreen(
 
             if (
                 selectedWarehouseId == null ||
-                warehouseList.none { it.id == selectedWarehouseId }
+                warehouseList.none {
+                    it.id == selectedWarehouseId && it.isActive
+                }
             ) {
                 selectedWarehouseId =
                     warehouseList.firstOrNull {
@@ -225,7 +230,45 @@ fun StockMovementsScreen(
                 }
             }
 
-            // نوع الحركة
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "بيانات المستند",
+                            color = MovementNavy,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        OutlinedTextField(
+                            value = documentNumber,
+                            onValueChange = { documentNumber = it },
+                            enabled = !isSaving && draftLines.isEmpty(),
+                            label = { Text("رقم المستند") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = movementFieldColors()
+                        )
+
+                        Text(
+                            "يمكن تعديل رقم المستند قبل إضافة الأصناف.",
+                            color = MovementMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -289,7 +332,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // اختيار الصنف
             item {
                 Box {
                     OutlinedTextField(
@@ -337,7 +379,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // اختيار المخزن
             item {
                 Box {
                     OutlinedTextField(
@@ -389,7 +430,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // الرصيد الحالي
             item {
                 if (selectedItem != null && selectedWarehouse != null) {
                     Card(
@@ -418,7 +458,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // الكمية
             item {
                 OutlinedTextField(
                     value = quantity,
@@ -432,7 +471,6 @@ fun StockMovementsScreen(
                 )
             }
 
-            // إضافة الصنف
             item {
                 OutlinedButton(
                     onClick = { addDraftLine() },
@@ -444,7 +482,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // مسودة المستند
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -499,7 +536,8 @@ fun StockMovementsScreen(
                                                 Text("الكمية الجديدة")
                                             },
                                             singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = movementFieldColors()
                                         )
 
                                         Row {
@@ -550,7 +588,7 @@ fun StockMovementsScreen(
                                                 Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                "الكمية: ${line.quantity}",
+                                                "الكمية: ${line.quantity} ${line.item.unit}",
                                                 modifier = Modifier.weight(1f),
                                                 color = MovementNavy
                                             )
@@ -603,7 +641,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // بيانات المستلم والجهة
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -629,7 +666,10 @@ fun StockMovementsScreen(
                             enabled = !isSaving,
                             label = {
                                 Text(
-                                    if (movementType == "OUT")
+                                    if (
+                                        movementType == "OUT" ||
+                                        movementType == "RETURN_OUT"
+                                    )
                                         "اسم المستلم (إلزامي)"
                                     else
                                         "اسم المستلم"
@@ -657,7 +697,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // الملاحظات
             item {
                 OutlinedTextField(
                     value = notes,
@@ -671,11 +710,15 @@ fun StockMovementsScreen(
                 )
             }
 
-            // الاعتماد
             item {
                 Button(
                     onClick = {
                         when {
+                            documentNumber.isBlank() -> {
+                                message = "أدخل رقم المستند"
+                                messageIsError = true
+                            }
+
                             selectedWarehouseId == null -> {
                                 message = "يرجى اختيار المخزن"
                                 messageIsError = true
@@ -691,8 +734,10 @@ fun StockMovementsScreen(
                                 messageIsError = true
                             }
 
-                            movementType == "OUT" &&
-                                recipientName.isBlank() -> {
+                            (
+                                movementType == "OUT" ||
+                                movementType == "RETURN_OUT"
+                            ) && recipientName.isBlank() -> {
                                 message = "يرجى إدخال اسم المستلم"
                                 messageIsError = true
                             }
@@ -732,6 +777,8 @@ fun StockMovementsScreen(
                             department = ""
                             editingIndex = -1
                             editingQuantity = ""
+                            documentNumber =
+                                "MOV-${System.currentTimeMillis()}"
                             message = "تم إلغاء المسودة"
                             messageIsError = false
                         }
@@ -743,7 +790,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // الرسائل
             if (message.isNotEmpty()) {
                 item {
                     Card(
@@ -768,7 +814,6 @@ fun StockMovementsScreen(
                 }
             }
 
-            // سجل الحركات
             item {
                 HorizontalDivider(
                     color = MovementBorder,
@@ -841,7 +886,7 @@ fun StockMovementsScreen(
                             HorizontalDivider(color = MovementBorder)
 
                             Text(
-                                "رقم الحركة: ${movement.documentNumber}",
+                                "رقم المستند: ${movement.documentNumber}",
                                 color = MovementText
                             )
 
@@ -917,54 +962,55 @@ fun StockMovementsScreen(
         }
     }
 
-    // تأكيد الاعتماد
     if (showApprovalDialog) {
         AlertDialog(
             onDismissRequest = {
-                showApprovalDialog = false
+                if (!isSaving) showApprovalDialog = false
             },
             title = {
                 Text("تأكيد اعتماد المستند")
             },
             text = {
                 Text(
-                    "سيتم اعتماد ${draftLines.size} صنفاً في مستند واحد من نوع $movementTitle. هل تريد المتابعة؟"
+                    "سيتم اعتماد ${draftLines.size} صنفاً في المستند رقم $documentNumber من نوع $movementTitle. هل تريد المتابعة؟"
                 )
             },
             confirmButton = {
                 TextButton(
+                    enabled = !isSaving,
                     onClick = {
                         val warehouseId = selectedWarehouseId
                         val typeToSave = movementType
+                        val numberToSave = documentNumber.trim()
                         val notesToSave = notes.trim()
                         val recipientToSave = recipientName.trim()
                         val departmentToSave = department.trim()
                         val linesToSave = draftLines.toList()
 
+                        val recipientRequired =
+                            typeToSave == "OUT" ||
+                            typeToSave == "RETURN_OUT"
+
                         if (
                             warehouseId == null ||
+                            numberToSave.isBlank() ||
                             linesToSave.isEmpty() ||
-                            (typeToSave == "OUT" && recipientToSave.isBlank())
+                            (recipientRequired && recipientToSave.isBlank())
                         ) {
                             showApprovalDialog = false
                             message = "تحقق من بيانات المستند واسم المستلم"
                             messageIsError = true
                         } else if (!isSaving) {
-                            showApprovalDialog = false
-
                             scope.launch {
                                 isSaving = true
                                 message = ""
 
                                 try {
-                                    val documentNumber =
-                                        "MOV-${System.currentTimeMillis()}"
-
                                     val now = System.currentTimeMillis()
 
                                     val movements = linesToSave.map { line ->
                                         StockMovementEntity(
-                                            documentNumber = documentNumber,
+                                            documentNumber = numberToSave,
                                             movementType = typeToSave,
                                             itemId = line.item.id,
                                             warehouseId = warehouseId,
@@ -981,10 +1027,11 @@ fun StockMovementsScreen(
                                     movementRepository
                                         .insertAndApproveMovements(movements)
 
+                                    showApprovalDialog = false
                                     message =
-                                        "تم اعتماد المستند بنجاح. رقم المستند: $documentNumber"
-
+                                        "تم اعتماد المستند بنجاح. رقم المستند: $numberToSave"
                                     messageIsError = false
+
                                     draftLines = emptyList()
                                     selectedItemId = null
                                     quantity = ""
@@ -993,6 +1040,8 @@ fun StockMovementsScreen(
                                     department = ""
                                     editingIndex = -1
                                     editingQuantity = ""
+                                    documentNumber =
+                                        "MOV-${System.currentTimeMillis()}"
 
                                 } catch (e: Exception) {
                                     val outgoing =
@@ -1035,6 +1084,7 @@ fun StockMovementsScreen(
             },
             dismissButton = {
                 TextButton(
+                    enabled = !isSaving,
                     onClick = {
                         showApprovalDialog = false
                     }
