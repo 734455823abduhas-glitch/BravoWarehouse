@@ -15,10 +15,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bravo.warehouse.data.entity.ItemEntity
 import com.bravo.warehouse.data.entity.StockMovementEntity
 import com.bravo.warehouse.data.repository.ItemRepository
-import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.data.repository.StockMovementRepository
+import com.bravo.warehouse.data.repository.WarehouseRepository
 import com.bravo.warehouse.util.DateTimeUtils
 import kotlinx.coroutines.launch
 
@@ -29,6 +30,11 @@ private val MovementText = Color(0xFF102B50)
 private val MovementMuted = Color(0xFF526783)
 private val MovementBorder = Color(0xFFB7C8DF)
 private val MovementGreen = Color(0xFF18834B)
+
+private data class MovementDraftLine(
+    val item: ItemEntity,
+    val quantity: Double
+)
 
 @Composable
 fun StockMovementsScreen(
@@ -41,10 +47,7 @@ fun StockMovementsScreen(
     val context = LocalContext.current
 
     val preferences = remember {
-        context.getSharedPreferences(
-            "bravo_settings",
-            Context.MODE_PRIVATE
-        )
+        context.getSharedPreferences("bravo_settings", Context.MODE_PRIVATE)
     }
 
     val itemList by itemRepository.getAllItems()
@@ -69,13 +72,22 @@ fun StockMovementsScreen(
     var quantity by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
+    var draftLines by remember {
+        mutableStateOf(listOf<MovementDraftLine>())
+    }
+
     var itemMenu by remember { mutableStateOf(false) }
     var warehouseMenu by remember { mutableStateOf(false) }
 
     var message by remember { mutableStateOf("") }
     var messageIsError by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
+    var showApprovalDialog by remember { mutableStateOf(false) }
+
     var currentBalance by remember { mutableStateOf(0.0) }
+
+    var editingIndex by remember { mutableIntStateOf(-1) }
+    var editingQuantity by remember { mutableStateOf("") }
 
     val selectedItem = itemList.firstOrNull {
         it.id == selectedItemId
@@ -93,6 +105,8 @@ fun StockMovementsScreen(
         else -> "حركة مخزون"
     }
 
+    val totalQuantity = draftLines.sumOf { it.quantity }
+
     LaunchedEffect(warehouseList) {
         if (warehouseList.isNotEmpty()) {
             val defaultId = preferences.getLong(
@@ -105,8 +119,11 @@ fun StockMovementsScreen(
                 warehouseList.none { it.id == selectedWarehouseId }
             ) {
                 selectedWarehouseId =
-                    warehouseList.firstOrNull { it.id == defaultId }?.id
-                        ?: warehouseList.firstOrNull()?.id
+                    warehouseList.firstOrNull {
+                        it.id == defaultId && it.isActive
+                    }?.id ?: warehouseList.firstOrNull {
+                        it.isActive
+                    }?.id
             }
         }
     }
@@ -132,11 +149,42 @@ fun StockMovementsScreen(
         }
     }
 
-    Scaffold(
-        containerColor = MovementBackground,
-        snackbarHost = {
-            SnackbarHost(hostState = remember { SnackbarHostState() })
+    fun addDraftLine() {
+        val item = selectedItem
+        val amount = quantity.trim().toDoubleOrNull()
+
+        when {
+            item == null -> {
+                message = "يرجى اختيار الصنف"
+                messageIsError = true
+            }
+
+            amount == null || !amount.isFinite() || amount <= 0.0 -> {
+                message = "أدخل كمية صحيحة أكبر من صفر"
+                messageIsError = true
+            }
+
+            draftLines.any { it.item.id == item.id } -> {
+                message = "الصنف موجود مسبقاً في المستند"
+                messageIsError = true
+            }
+
+            else -> {
+                draftLines = draftLines + MovementDraftLine(
+                    item = item,
+                    quantity = amount
+                )
+
+                selectedItemId = null
+                quantity = ""
+                message = "تمت إضافة الصنف إلى المستند"
+                messageIsError = false
+            }
         }
+    }
+
+    Scaffold(
+        containerColor = MovementBackground
     ) { padding ->
 
         LazyColumn(
@@ -146,6 +194,7 @@ fun StockMovementsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
             item {
                 Row(
                     modifier = Modifier
@@ -156,6 +205,7 @@ fun StockMovementsScreen(
                 ) {
                     TextButton(
                         onClick = onBack,
+                        enabled = !isSaving,
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = MovementNavy
                         )
@@ -164,7 +214,7 @@ fun StockMovementsScreen(
                     }
 
                     Text(
-                        text = "حركة المخزون",
+                        "حركة المخزون",
                         color = MovementNavy,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.headlineSmall
@@ -172,6 +222,7 @@ fun StockMovementsScreen(
                 }
             }
 
+            // نوع الحركة
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -191,54 +242,43 @@ fun StockMovementsScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(
-                                "IN" to "وارد",
-                                "OUT" to "منصرف"
-                            ).forEach { (type, title) ->
-                                Button(
-                                    onClick = {
-                                        movementType = type
-                                        message = ""
-                                    },
-                                    enabled = !isSaving,
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (movementType == type)
-                                            MovementNavy else MovementBackground,
-                                        contentColor = if (movementType == type)
-                                            Color.White else MovementNavy
-                                    )
-                                ) {
-                                    Text(title)
-                                }
-                            }
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        listOf(
+                            listOf("IN" to "وارد", "OUT" to "منصرف"),
                             listOf(
                                 "RETURN_IN" to "مرتجع للمخزن",
                                 "RETURN_OUT" to "مرتجع من المخزن"
-                            ).forEach { (type, title) ->
-                                Button(
-                                    onClick = {
-                                        movementType = type
-                                        message = ""
-                                    },
-                                    enabled = !isSaving,
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (movementType == type)
-                                            MovementNavy else MovementBackground,
-                                        contentColor = if (movementType == type)
-                                            Color.White else MovementNavy
-                                    )
-                                ) {
-                                    Text(title)
+                            )
+                        ).forEach { row ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                row.forEach { (type, title) ->
+                                    Button(
+                                        onClick = {
+                                            if (draftLines.isNotEmpty()) {
+                                                message =
+                                                    "اعتمد أو ألغِ المستند الحالي قبل تغيير نوع الحركة"
+                                                messageIsError = true
+                                            } else {
+                                                movementType = type
+                                                message = ""
+                                            }
+                                        },
+                                        enabled = !isSaving,
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor =
+                                                if (movementType == type)
+                                                    MovementNavy
+                                                else MovementBackground,
+                                            contentColor =
+                                                if (movementType == type)
+                                                    Color.White
+                                                else MovementNavy
+                                        )
+                                    ) {
+                                        Text(title)
+                                    }
                                 }
                             }
                         }
@@ -246,6 +286,7 @@ fun StockMovementsScreen(
                 }
             }
 
+            // اختيار الصنف
             item {
                 Box {
                     OutlinedTextField(
@@ -282,10 +323,10 @@ fun StockMovementsScreen(
                                         color = MovementText
                                     )
                                 },
-                                enabled = !isSaving,
                                 onClick = {
                                     selectedItemId = item.id
                                     itemMenu = false
+                                    message = ""
                                 }
                             )
                         }
@@ -293,6 +334,7 @@ fun StockMovementsScreen(
                 }
             }
 
+            // اختيار المخزن
             item {
                 Box {
                     OutlinedTextField(
@@ -319,7 +361,7 @@ fun StockMovementsScreen(
                         onDismissRequest = { warehouseMenu = false },
                         modifier = Modifier.heightIn(max = 300.dp)
                     ) {
-                        warehouseList.forEach { warehouse ->
+                        warehouseList.filter { it.isActive }.forEach { warehouse ->
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -327,10 +369,16 @@ fun StockMovementsScreen(
                                         color = MovementText
                                     )
                                 },
-                                enabled = !isSaving,
                                 onClick = {
-                                    selectedWarehouseId = warehouse.id
-                                    warehouseMenu = false
+                                    if (draftLines.isNotEmpty()) {
+                                        message =
+                                            "لا يمكن تغيير المخزن بعد إضافة الأصناف. ألغِ المسودة أولاً."
+                                        messageIsError = true
+                                    } else {
+                                        selectedWarehouseId = warehouse.id
+                                        warehouseMenu = false
+                                        message = ""
+                                    }
                                 }
                             )
                         }
@@ -338,6 +386,7 @@ fun StockMovementsScreen(
                 }
             }
 
+            // الرصيد الحالي
             item {
                 if (selectedItem != null && selectedWarehouse != null) {
                     Card(
@@ -366,6 +415,7 @@ fun StockMovementsScreen(
                 }
             }
 
+            // الكمية
             item {
                 OutlinedTextField(
                     value = quantity,
@@ -379,100 +429,214 @@ fun StockMovementsScreen(
                 )
             }
 
+            // إضافة الصنف
+            item {
+                OutlinedButton(
+                    onClick = { addDraftLine() },
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("＋ إضافة الصنف إلى المستند")
+                }
+            }
+
+            // مسودة المستند
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    border = BorderStroke(1.dp, MovementBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "أصناف المستند (${draftLines.size})",
+                            color = MovementNavy,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        if (draftLines.isEmpty()) {
+                            Text(
+                                "لم تتم إضافة أصناف بعد.",
+                                color = MovementMuted
+                            )
+                        }
+
+                        draftLines.forEachIndexed { index, line ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MovementBackground
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        "${line.item.itemCode} - ${line.item.itemName}",
+                                        fontWeight = FontWeight.Bold,
+                                        color = MovementText
+                                    )
+
+                                    if (editingIndex == index) {
+                                        OutlinedTextField(
+                                            value = editingQuantity,
+                                            onValueChange = {
+                                                editingQuantity = it
+                                            },
+                                            label = {
+                                                Text("الكمية الجديدة")
+                                            },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Row {
+                                            TextButton(
+                                                onClick = {
+                                                    val newAmount =
+                                                        editingQuantity.toDoubleOrNull()
+
+                                                    if (
+                                                        newAmount != null &&
+                                                        newAmount.isFinite() &&
+                                                        newAmount > 0
+                                                    ) {
+                                                        draftLines =
+                                                            draftLines.toMutableList().also {
+                                                                it[index] =
+                                                                    line.copy(
+                                                                        quantity = newAmount
+                                                                    )
+                                                            }
+
+                                                        editingIndex = -1
+                                                        editingQuantity = ""
+                                                        message = ""
+                                                    } else {
+                                                        message =
+                                                            "أدخل كمية صحيحة أكبر من صفر"
+                                                        messageIsError = true
+                                                    }
+                                                },
+                                                enabled = !isSaving
+                                            ) {
+                                                Text("حفظ")
+                                            }
+
+                                            TextButton(
+                                                onClick = {
+                                                    editingIndex = -1
+                                                    editingQuantity = ""
+                                                }
+                                            ) {
+                                                Text("إلغاء")
+                                            }
+                                        }
+                                    } else {
+                                        Row(
+                                            verticalAlignment =
+                                                Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "الكمية: ${line.quantity}",
+                                                modifier = Modifier.weight(1f),
+                                                color = MovementNavy
+                                            )
+
+                                            TextButton(
+                                                onClick = {
+                                                    editingIndex = index
+                                                    editingQuantity =
+                                                        line.quantity.toString()
+                                                },
+                                                enabled = !isSaving
+                                            ) {
+                                                Text("تعديل")
+                                            }
+
+                                            TextButton(
+                                                onClick = {
+                                                    draftLines =
+                                                        draftLines.filterIndexed {
+                                                            i, _ -> i != index
+                                                        }
+                                                },
+                                                enabled = !isSaving
+                                            ) {
+                                                Text(
+                                                    "حذف",
+                                                    color = MovementRed
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = MovementBorder)
+
+                        Text(
+                            "إجمالي الأصناف: ${draftLines.size}",
+                            fontWeight = FontWeight.Bold,
+                            color = MovementNavy
+                        )
+
+                        Text(
+                            "إجمالي الكميات: $totalQuantity",
+                            fontWeight = FontWeight.Bold,
+                            color = MovementNavy
+                        )
+                    }
+                }
+            }
+
+            // الملاحظات
             item {
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
                     enabled = !isSaving,
-                    label = { Text("ملاحظات") },
+                    label = { Text("ملاحظات المستند") },
                     modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
                     shape = RoundedCornerShape(12.dp),
                     colors = movementFieldColors()
                 )
             }
 
+            // الاعتماد
             item {
                 Button(
                     onClick = {
-                        val qty = quantity.trim().toDoubleOrNull()
-                        val itemId = selectedItemId
-                        val warehouseId = selectedWarehouseId
-                        val typeToSave = movementType
-                        val titleToSave = movementTitle
-                        val notesToSave = notes.trim()
-
-                        if (itemId == null) {
-                            message = "يرجى اختيار الصنف"
-                            messageIsError = true
-                            return@Button
-                        }
-
-                        if (warehouseId == null) {
-                            message = "يرجى اختيار المخزن"
-                            messageIsError = true
-                            return@Button
-                        }
-
-                        if (qty == null || !qty.isFinite() || qty <= 0) {
-                            message = "يرجى إدخال كمية صحيحة أكبر من صفر"
-                            messageIsError = true
-                            return@Button
-                        }
-
-                        if (isSaving) return@Button
-
-                        isSaving = true
-                        message = ""
-
-                        scope.launch {
-                            try {
-                                val movement = StockMovementEntity(
-                                    documentNumber = "MOV-${System.currentTimeMillis()}",
-                                    movementType = typeToSave,
-                                    itemId = itemId,
-                                    warehouseId = warehouseId,
-                                    quantity = qty,
-                                    notes = notesToSave,
-                                    isApproved = false
-                                )
-
-                                movementRepository.insertAndApproveMovement(
-                                    movement
-                                )
-
-                                message = "تم حفظ واعتماد $titleToSave بنجاح"
-                                messageIsError = false
-
-                                quantity = ""
-                                notes = ""
-
-                                currentBalance =
-                                    movementRepository.getCurrentBalance(
-                                        itemId,
-                                        warehouseId
-                                    )
-
-                            } catch (e: Exception) {
-                                val insufficientStock =
-                                    typeToSave == "OUT" ||
-                                    typeToSave == "RETURN_OUT"
-
-                                message = if (
-                                    insufficientStock &&
-                                    e.message?.contains(
-                                        "Movement approval failed",
-                                        ignoreCase = true
-                                    ) == true
-                                ) {
-                                    "الرصيد غير كافٍ لتنفيذ هذه الحركة"
-                                } else {
-                                    "فشل حفظ الحركة: ${e.message ?: "خطأ غير معروف"}"
-                                }
-
+                        when {
+                            selectedWarehouseId == null -> {
+                                message = "يرجى اختيار المخزن"
                                 messageIsError = true
-                            } finally {
-                                isSaving = false
                             }
+
+                            draftLines.isEmpty() -> {
+                                message = "أضف صنفاً واحداً على الأقل"
+                                messageIsError = true
+                            }
+
+                            editingIndex >= 0 -> {
+                                message = "احفظ تعديل الكمية أولاً"
+                                messageIsError = true
+                            }
+
+                            isSaving -> Unit
+
+                            else -> showApprovalDialog = true
                         }
                     },
                     modifier = Modifier
@@ -485,28 +649,42 @@ fun StockMovementsScreen(
                         contentColor = Color.White
                     )
                 ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                    } else {
-                        Text(
-                            "حفظ واعتماد $movementTitle",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        "اعتماد مستند $movementTitle",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        if (!isSaving) {
+                            draftLines = emptyList()
+                            selectedItemId = null
+                            quantity = ""
+                            notes = ""
+                            editingIndex = -1
+                            editingQuantity = ""
+                            message = "تم إلغاء المسودة"
+                            messageIsError = false
+                        }
+                    },
+                    enabled = !isSaving && draftLines.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("إلغاء المسودة")
                 }
             }
 
+            // الرسائل
             if (message.isNotEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor = if (messageIsError)
-                                Color(0xFFFFEEEE) else Color(0xFFE8F5EC)
+                                Color(0xFFFFEEEE)
+                            else
+                                Color(0xFFE8F5EC)
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -514,12 +692,15 @@ fun StockMovementsScreen(
                             text = message,
                             modifier = Modifier.padding(12.dp),
                             color = if (messageIsError)
-                                MovementRed else MovementGreen
+                                MovementRed
+                            else
+                                MovementGreen
                         )
                     }
                 }
             }
 
+            // سجل الحركات
             item {
                 HorizontalDivider(
                     color = MovementBorder,
@@ -527,7 +708,7 @@ fun StockMovementsScreen(
                 )
 
                 Text(
-                    text = "سجل الحركات",
+                    "سجل الحركات",
                     color = MovementNavy,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge
@@ -602,7 +783,10 @@ fun StockMovementsScreen(
                             )
 
                             Text(
-                                "المخزن: ${warehouse?.warehouseName ?: movement.warehouseId}",
+                                "المخزن: ${
+                                    warehouse?.warehouseName
+                                        ?: movement.warehouseId
+                                }",
                                 color = MovementText
                             )
 
@@ -630,12 +814,14 @@ fun StockMovementsScreen(
                             }
 
                             Text(
-                                text = if (movement.isApproved)
+                                if (movement.isApproved)
                                     "الحالة: معتمدة"
                                 else
                                     "الحالة: غير معتمدة",
                                 color = if (movement.isApproved)
-                                    MovementGreen else MovementRed,
+                                    MovementGreen
+                                else
+                                    MovementRed,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -647,6 +833,130 @@ fun StockMovementsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // تأكيد الاعتماد
+    if (showApprovalDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showApprovalDialog = false
+            },
+            title = {
+                Text("تأكيد اعتماد المستند")
+            },
+            text = {
+                Text(
+                    "سيتم اعتماد ${draftLines.size} صنفاً في مستند واحد من نوع $movementTitle. هل تريد المتابعة؟"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showApprovalDialog = false
+
+                        val warehouseId = selectedWarehouseId
+                        val typeToSave = movementType
+                        val notesToSave = notes.trim()
+                        val linesToSave = draftLines.toList()
+
+                        if (warehouseId != null) {
+                            scope.launch {
+                                isSaving = true
+                                message = ""
+
+                                try {
+                                    val documentNumber =
+                                        "MOV-${System.currentTimeMillis()}"
+
+                                    val now = System.currentTimeMillis()
+
+                                    val movements = linesToSave.map { line ->
+                                        StockMovementEntity(
+                                            documentNumber = documentNumber,
+                                            movementType = typeToSave,
+                                            itemId = line.item.id,
+                                            warehouseId = warehouseId,
+                                            quantity = line.quantity,
+                                            notes = notesToSave,
+                                            movementDate = now,
+                                            createdAt = now,
+                                            isApproved = false
+                                        )
+                                    }
+
+                                    movementRepository
+                                        .insertAndApproveMovements(movements)
+
+                                    message =
+                                        "تم اعتماد المستند بنجاح. رقم المستند: $documentNumber"
+
+                                    messageIsError = false
+                                    draftLines = emptyList()
+                                    selectedItemId = null
+                                    quantity = ""
+                                    notes = ""
+                                    editingIndex = -1
+                                    editingQuantity = ""
+
+                                    val itemId = selectedItemId
+
+                                    if (itemId != null) {
+                                        currentBalance =
+                                            movementRepository.getCurrentBalance(
+                                                itemId,
+                                                warehouseId
+                                            )
+                                    }
+
+                                } catch (e: Exception) {
+                                    val outgoing =
+                                        typeToSave == "OUT" ||
+                                        typeToSave == "RETURN_OUT"
+
+                                    message = if (
+                                        outgoing &&
+                                        (
+                                            e.message?.contains(
+                                                "Insufficient stock",
+                                                ignoreCase = true
+                                            ) == true ||
+                                            e.message?.contains(
+                                                "Movement approval failed",
+                                                ignoreCase = true
+                                            ) == true
+                                        )
+                                    ) {
+                                        "الرصيد غير كافٍ لأحد الأصناف. لم يتم اعتماد أي صنف."
+                                    } else {
+                                        "فشل اعتماد المستند: ${
+                                            e.message ?: "خطأ غير معروف"
+                                        }"
+                                    }
+
+                                    messageIsError = true
+                                } finally {
+                                    isSaving = false
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text(
+                        "نعم، اعتماد",
+                        color = MovementGreen
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showApprovalDialog = false
+                    }
+                ) {
+                    Text("إلغاء")
+                }
+            }
+        )
     }
 }
 
