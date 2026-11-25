@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,16 +19,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bravo.warehouse.data.entity.ItemEntity
 import com.bravo.warehouse.data.entity.WarehouseEntity
+import com.bravo.warehouse.data.repository.TransferLine
 import com.bravo.warehouse.data.repository.TransferRepository
 import kotlinx.coroutines.launch
 
 private val TransferNavy = Color(0xFF082F68)
 private val TransferRed = Color(0xFFE5242A)
-private val TransferBackground = Color(0xFFF3F6FC)
 private val TransferText = Color(0xFF102B50)
-private val TransferMuted = Color(0xFF526783)
 private val TransferBorder = Color(0xFFB7C8DF)
 private val TransferGreen = Color(0xFF16834A)
+
+private data class TransferDraftLine(
+    val item: ItemEntity,
+    val quantity: Double
+)
 
 @Composable
 fun TransferScreen(
@@ -35,12 +41,8 @@ fun TransferScreen(
     transferRepository: TransferRepository
 ) {
     val context = LocalContext.current
-
     val preferences = remember {
-        context.getSharedPreferences(
-            "bravo_settings",
-            Context.MODE_PRIVATE
-        )
+        context.getSharedPreferences("bravo_settings", Context.MODE_PRIVATE)
     }
 
     val defaultWarehouseId = remember {
@@ -48,44 +50,39 @@ fun TransferScreen(
             .takeIf { it > 0L }
     }
 
-    var selectedItem by remember {
-        mutableStateOf<ItemEntity?>(null)
-    }
+    var source by remember { mutableStateOf<WarehouseEntity?>(null) }
+    var destination by remember { mutableStateOf<WarehouseEntity?>(null) }
 
-    var source by remember {
-        mutableStateOf<WarehouseEntity?>(null)
-    }
-
-    var destination by remember {
-        mutableStateOf<WarehouseEntity?>(null)
-    }
-
+    var selectedItem by remember { mutableStateOf<ItemEntity?>(null) }
     var quantity by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
+
+    var draftLines by remember { mutableStateOf(listOf<TransferDraftLine>()) }
 
     var itemMenu by remember { mutableStateOf(false) }
     var sourceMenu by remember { mutableStateOf(false) }
     var destinationMenu by remember { mutableStateOf(false) }
 
+    var message by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(warehouses, defaultWarehouseId) {
-        val currentSourceExists = warehouses.any {
-            it.id == source?.id
-        }
-
-        if (source == null || !currentSourceExists) {
+        if (warehouses.none { it.id == source?.id }) {
             source = warehouses.firstOrNull {
-                it.id == defaultWarehouseId
-            }
+                it.id == defaultWarehouseId && it.isActive
+            } ?: warehouses.firstOrNull { it.isActive }
         }
 
-        if (destination?.id == source?.id) {
+        if (destination?.id == source?.id ||
+            warehouses.none { it.id == destination?.id }
+        ) {
             destination = null
         }
     }
+
+    val totalQuantity = draftLines.sumOf { it.quantity }
 
     Column(
         modifier = Modifier
@@ -98,34 +95,25 @@ fun TransferScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = TransferNavy
-            )
+            colors = CardDefaults.cardColors(containerColor = TransferNavy)
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "التحويل بين المخازن",
+                    "التحويل بين المخازن",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-
                 Text(
-                    text = "نقل الأصناف والكميات من مخزن إلى آخر",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f)
+                    "إنشاء مستند تحويل يحتوي على عدة أصناف",
+                    color = Color.White.copy(alpha = 0.9f)
                 )
-
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.25f)
-                )
-
+                HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
                 Text(
-                    text = "حدد الصنف ومخزن المصدر والمخزن المستلم ثم أدخل الكمية.",
-                    style = MaterialTheme.typography.bodySmall,
+                    "أضف الأصناف والكميات ثم اعتمد التحويل دفعة واحدة.",
                     color = Color.White.copy(alpha = 0.9f)
                 )
             }
@@ -134,9 +122,7 @@ fun TransferScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
             border = BorderStroke(1.dp, TransferBorder)
         ) {
             Column(
@@ -144,105 +130,40 @@ fun TransferScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = "بيانات التحويل",
+                    "بيانات التحويل",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TransferNavy
                 )
 
-                HorizontalDivider(color = TransferBorder)
-
-                Text(
-                    text = "الصنف",
-                    color = TransferText,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Box {
-                    OutlinedTextField(
-                        value = selectedItem?.let {
-                            "${it.itemCode} - ${it.itemName}"
-                        } ?: "",
-                        onValueChange = {},
-                        readOnly = true,
-                        placeholder = {
-                            Text("اضغط لاختيار الصنف")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = transferFieldColors()
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable { itemMenu = true }
-                    )
-
-                    DropdownMenu(
-                        expanded = itemMenu,
-                        onDismissRequest = { itemMenu = false },
-                        modifier = Modifier.heightIn(max = 300.dp)
-                    ) {
-                        items.filter { it.isActive }.forEach { item ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "${item.itemCode} - ${item.itemName}"
-                                    )
-                                },
-                                onClick = {
-                                    selectedItem = item
-                                    itemMenu = false
-                                    message = ""
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    text = "مخزن المصدر",
-                    color = TransferText,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("مخزن المصدر", color = TransferText)
 
                 Box {
                     OutlinedTextField(
                         value = source?.warehouseName ?: "",
                         onValueChange = {},
                         readOnly = true,
-                        placeholder = {
-                            Text("اختر المخزن الذي سيتم الصرف منه")
-                        },
+                        placeholder = { Text("اختر مخزن المصدر") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = transferFieldColors()
+                        shape = RoundedCornerShape(12.dp)
                     )
-
                     Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable { sourceMenu = true }
+                        Modifier.matchParentSize().clickable {
+                            sourceMenu = true
+                        }
                     )
-
                     DropdownMenu(
                         expanded = sourceMenu,
-                        onDismissRequest = { sourceMenu = false },
-                        modifier = Modifier.heightIn(max = 300.dp)
+                        onDismissRequest = { sourceMenu = false }
                     ) {
-                        warehouses.forEach { warehouse ->
+                        warehouses.filter { it.isActive }.forEach { warehouse ->
                             DropdownMenuItem(
-                                text = {
-                                    Text(warehouse.warehouseName)
-                                },
+                                text = { Text(warehouse.warehouseName) },
                                 onClick = {
                                     source = warehouse
-
                                     if (destination?.id == warehouse.id) {
                                         destination = null
                                     }
-
                                     sourceMenu = false
                                     message = ""
                                 }
@@ -251,43 +172,31 @@ fun TransferScreen(
                     }
                 }
 
-                Text(
-                    text = "المخزن المستلم",
-                    color = TransferText,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("المخزن المستلم", color = TransferText)
 
                 Box {
                     OutlinedTextField(
                         value = destination?.warehouseName ?: "",
                         onValueChange = {},
                         readOnly = true,
-                        placeholder = {
-                            Text("اختر المخزن الذي سيستلم الكمية")
-                        },
+                        placeholder = { Text("اختر المخزن المستلم") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = transferFieldColors()
+                        shape = RoundedCornerShape(12.dp)
                     )
-
                     Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable { destinationMenu = true }
+                        Modifier.matchParentSize().clickable {
+                            destinationMenu = true
+                        }
                     )
-
                     DropdownMenu(
                         expanded = destinationMenu,
-                        onDismissRequest = { destinationMenu = false },
-                        modifier = Modifier.heightIn(max = 300.dp)
+                        onDismissRequest = { destinationMenu = false }
                     ) {
                         warehouses
-                            .filter { it.id != source?.id }
+                            .filter { it.isActive && it.id != source?.id }
                             .forEach { warehouse ->
                                 DropdownMenuItem(
-                                    text = {
-                                        Text(warehouse.warehouseName)
-                                    },
+                                    text = { Text(warehouse.warehouseName) },
                                     onClick = {
                                         destination = warehouse
                                         destinationMenu = false
@@ -303,21 +212,55 @@ fun TransferScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
             border = BorderStroke(1.dp, TransferBorder)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "الكمية والملاحظات",
+                    "إضافة الأصناف",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TransferNavy
                 )
+
+                Box {
+                    OutlinedTextField(
+                        value = selectedItem?.let {
+                            "${it.itemCode} - ${it.itemName}"
+                        } ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        placeholder = { Text("اختر الصنف") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Box(
+                        Modifier.matchParentSize().clickable {
+                            itemMenu = true
+                        }
+                    )
+                    DropdownMenu(
+                        expanded = itemMenu,
+                        onDismissRequest = { itemMenu = false },
+                        modifier = Modifier.heightIn(max = 300.dp)
+                    ) {
+                        items.filter { it.isActive }.forEach { item ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text("${item.itemCode} - ${item.itemName}")
+                                },
+                                onClick = {
+                                    selectedItem = item
+                                    itemMenu = false
+                                    message = ""
+                                }
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = quantity,
@@ -326,106 +269,208 @@ fun TransferScreen(
                         message = ""
                     },
                     label = { Text("الكمية") },
-                    placeholder = { Text("أدخل الكمية المراد تحويلها") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = transferFieldColors()
+                    shape = RoundedCornerShape(12.dp)
                 )
 
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("ملاحظات") },
-                    placeholder = {
-                        Text("ملاحظات إضافية (اختياري)")
+                OutlinedButton(
+                    onClick = {
+                        val item = selectedItem
+                        val amount = quantity.toDoubleOrNull()
+
+                        when {
+                            item == null ->
+                                message = "يرجى اختيار الصنف"
+
+                            amount == null ||
+                                !amount.isFinite() ||
+                                amount <= 0.0 ->
+                                message = "أدخل كمية صحيحة أكبر من صفر"
+
+                            draftLines.any { it.item.id == item.id } ->
+                                message = "الصنف موجود مسبقاً في المستند"
+
+                            else -> {
+                                draftLines = draftLines + TransferDraftLine(
+                                    item = item,
+                                    quantity = amount
+                                )
+                                selectedItem = null
+                                quantity = ""
+                                message = "تمت إضافة الصنف إلى المستند"
+                            }
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = transferFieldColors()
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("＋ إضافة الصنف إلى المستند")
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, TransferBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "أصناف مستند التحويل (${draftLines.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TransferNavy
+                )
+
+                if (draftLines.isEmpty()) {
+                    Text(
+                        "لم تتم إضافة أصناف بعد.",
+                        color = Color.Gray
+                    )
+                }
+
+                draftLines.forEachIndexed { index, line ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFF3F6FC)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "${line.item.itemCode} - ${line.item.itemName}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = TransferText
+                                )
+                                Text(
+                                    "الكمية: ${line.quantity}",
+                                    color = TransferNavy
+                                )
+                            }
+
+                            TextButton(
+                                onClick = {
+                                    draftLines = draftLines.filterIndexed {
+                                        i, _ -> i != index
+                                    }
+                                },
+                                enabled = !loading
+                            ) {
+                                Text("حذف", color = TransferRed)
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = TransferBorder)
+
+                Text(
+                    "إجمالي الأصناف: ${draftLines.size}",
+                    fontWeight = FontWeight.Bold,
+                    color = TransferNavy
+                )
+                Text(
+                    "إجمالي الكميات: $totalQuantity",
+                    fontWeight = FontWeight.Bold,
+                    color = TransferNavy
                 )
             }
         }
 
+        OutlinedTextField(
+            value = notes,
+            onValueChange = { notes = it },
+            label = { Text("ملاحظات المستند") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+            shape = RoundedCornerShape(12.dp)
+        )
+
         Button(
             onClick = {
-                val item = selectedItem
                 val from = source
                 val to = destination
-                val amount = quantity.toDoubleOrNull()
 
-                if (item == null) {
-                    message = "يرجى اختيار الصنف"
-                    return@Button
-                }
+                when {
+                    from == null ->
+                        message = "يرجى اختيار مخزن المصدر"
 
-                if (from == null) {
-                    message = "يرجى اختيار مخزن المصدر"
-                    return@Button
-                }
+                    to == null ->
+                        message = "يرجى اختيار المخزن المستلم"
 
-                if (to == null) {
-                    message = "يرجى اختيار المخزن المستلم"
-                    return@Button
-                }
+                    from.id == to.id ->
+                        message = "لا يمكن التحويل إلى المخزن نفسه"
 
-                if (from.id == to.id) {
-                    message = "لا يمكن التحويل إلى المخزن نفسه"
-                    return@Button
-                }
+                    draftLines.isEmpty() ->
+                        message = "أضف صنفاً واحداً على الأقل"
 
-                if (
-                    amount == null ||
-                    !amount.isFinite() ||
-                    amount <= 0.0
-                ) {
-                    message = "يرجى إدخال كمية صحيحة أكبر من صفر"
-                    return@Button
-                }
+                    loading -> return@Button
 
-                if (loading) return@Button
+                    else -> {
+                        scope.launch {
+                            loading = true
+                            message = ""
 
-                scope.launch {
-                    loading = true
-                    message = ""
+                            try {
+                                val number = "TR-${System.currentTimeMillis()}"
 
-                    try {
-                        val transferNumber =
-                            "TR-${System.currentTimeMillis()}"
+                                transferRepository.createTransfers(
+                                    transferNumber = number,
+                                    lines = draftLines.map {
+                                        TransferLine(
+                                            itemId = it.item.id,
+                                            quantity = it.quantity
+                                        )
+                                    },
+                                    sourceWarehouseId = from.id,
+                                    destinationWarehouseId = to.id,
+                                    notes = notes.trim()
+                                )
 
-                        transferRepository.createTransfer(
-                            transferNumber = transferNumber,
-                            itemId = item.id,
-                            sourceWarehouseId = from.id,
-                            destinationWarehouseId = to.id,
-                            quantity = amount,
-                            notes = notes.trim()
-                        )
+                                message = "تم اعتماد التحويل بنجاح. رقم المستند: $number"
 
-                        message =
-                            "تم التحويل بنجاح. رقم المستند: $transferNumber"
+                                draftLines = emptyList()
+                                selectedItem = null
+                                quantity = ""
+                                notes = ""
+                                destination = null
 
-                        selectedItem = null
-                        destination = null
-                        quantity = ""
-                        notes = ""
+                            } catch (e: Exception) {
+                                message = when {
+                                    e.message?.contains(
+                                        "Insufficient stock",
+                                        ignoreCase = true
+                                    ) == true ->
+                                        "الرصيد غير كافٍ لأحد الأصناف"
 
-                    } catch (e: Exception) {
-                        message = when {
-                            e.message?.contains(
-                                "Insufficient stock",
-                                ignoreCase = true
-                            ) == true ->
-                                "الرصيد غير كافٍ لتنفيذ التحويل"
+                                    e.message?.contains(
+                                        "Duplicate items",
+                                        ignoreCase = true
+                                    ) == true ->
+                                        "يوجد صنف مكرر في المستند"
 
-                            else ->
-                                "فشل تنفيذ التحويل: ${
-                                    e.message ?: "خطأ غير معروف"
-                                }"
+                                    else ->
+                                        "فشل التحويل: ${e.message ?: "خطأ غير معروف"}"
+                                }
+                            } finally {
+                                loading = false
+                            }
                         }
-                    } finally {
-                        loading = false
                     }
                 }
             },
@@ -436,22 +481,20 @@ fun TransferScreen(
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = TransferRed,
-                contentColor = Color.White,
-                disabledContainerColor = TransferRed.copy(alpha = 0.5f)
+                contentColor = Color.White
             )
         ) {
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(23.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White
+                    modifier = Modifier.size(22.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("جارٍ تنفيذ التحويل...")
+                Spacer(Modifier.width(10.dp))
+                Text("جارٍ اعتماد المستند...")
             } else {
                 Text(
-                    text = "تنفيذ التحويل",
-                    style = MaterialTheme.typography.titleMedium,
+                    "اعتماد مستند التحويل",
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -462,7 +505,6 @@ fun TransferScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (success)
                         Color(0xFFE8F5EC)
@@ -474,34 +516,14 @@ fun TransferScreen(
                     if (success) TransferGreen else TransferRed
                 )
             ) {
-                Row(
+                Text(
+                    message,
                     modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = message,
-                        color = if (success)
-                            TransferGreen
-                        else
-                            TransferRed,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                    color = if (success) TransferGreen else TransferRed
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
     }
 }
-
-@Composable
-private fun transferFieldColors() =
-    OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = TransferNavy,
-        unfocusedBorderColor = TransferBorder,
-        focusedLabelColor = TransferNavy,
-        cursorColor = TransferNavy,
-        focusedTextColor = TransferText,
-        unfocusedTextColor = TransferText
-    )
