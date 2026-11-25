@@ -18,7 +18,7 @@ import com.bravo.warehouse.data.entity.TransferEntity
         StockMovementEntity::class,
         TransferEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
