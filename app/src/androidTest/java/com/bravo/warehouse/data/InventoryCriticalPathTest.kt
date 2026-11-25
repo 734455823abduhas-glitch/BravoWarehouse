@@ -2,7 +2,6 @@ package com.bravo.warehouse.data
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.bravo.warehouse.data.entity.ItemEntity
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,30 +27,30 @@ class InventoryCriticalPathTest {
     fun setUp() {
         DatabaseProvider.closeDatabase()
         context.deleteDatabase(AppDatabase.DATABASE_NAME)
-        database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        // Use the exact named database used by DatabaseBackupManager.
+        database = DatabaseProvider.getDatabase(context)
+        database.openHelper.writableDatabase
     }
 
     @After
     fun tearDown() {
-        database.close()
         DatabaseProvider.closeDatabase()
         context.deleteDatabase(AppDatabase.DATABASE_NAME)
     }
 
     @Test
     fun roomVersionSixMigrationPreservesLegacyMovementsAndBalances() = runBlocking {
-        database.close()
+        DatabaseProvider.closeDatabase()
+        context.deleteDatabase(AppDatabase.DATABASE_NAME)
         createLegacyVersionFiveDatabase()
 
-        val migrated = DatabaseProvider.getDatabase(context)
-        assertEquals(AppDatabase.DATABASE_VERSION, migrated.openHelper.writableDatabase.version)
-        val item = migrated.itemDao().getItemById(41L)
+        database = DatabaseProvider.getDatabase(context)
+        assertEquals(AppDatabase.DATABASE_VERSION, database.openHelper.writableDatabase.version)
+        val item = database.itemDao().getItemById(41L)
         assertEquals("LEGACY-ITEM", item?.itemCode)
-        assertEquals(1, migrated.stockMovementDao().getMovementsByItem(41L).first().size)
-        assertEquals(12.5, migrated.stockMovementDao().getTotalIncoming(41L, 7L), 0.000001)
-        assertEquals(0.0, migrated.stockMovementDao().getTotalOutgoing(41L, 7L), 0.000001)
+        assertEquals(1, database.stockMovementDao().getMovementsByItem(41L).first().size)
+        assertEquals(12.5, database.stockMovementDao().getTotalIncoming(41L, 7L), 0.000001)
+        assertEquals(0.0, database.stockMovementDao().getTotalOutgoing(41L, 7L), 0.000001)
     }
 
     @Test
@@ -91,7 +89,7 @@ class InventoryCriticalPathTest {
         assertEquals(1, transferLines.size)
         assertEquals(2, movementLines.size)
         assertTrue(movementLines.all { it.isApproved })
-        assertTrue(movementLines.map { it.documentNumber }.distinct() == listOf("TR-ATOMIC-1"))
+        assertEquals(listOf("TR-ATOMIC-1"), movementLines.map { it.documentNumber }.distinct())
         assertEquals(12.5, balance(item, source), 0.000001)
         assertEquals(7.5, balance(item, destination), 0.000001)
     }
@@ -137,37 +135,36 @@ class InventoryCriticalPathTest {
 
     @Test
     fun exportedBackupCanBeRestoredWithoutLosingHistoricalRows() = runBlocking {
-        val warehouse = database.warehouseDao().insertWarehouse(
+        // Insert KEEP-ME and its historical movement in bravo_warehouse.db,
+        // the same named database exported and restored by DatabaseBackupManager.
+        val activeDatabase = DatabaseProvider.getDatabase(context)
+        database = activeDatabase
+        val warehouse = activeDatabase.warehouseDao().insertWarehouse(
             WarehouseEntity(warehouseCode = "BACKUP", warehouseName = "Backup warehouse")
         )
-        val item = database.itemDao().insertItem(
+        val item = activeDatabase.itemDao().insertItem(
             ItemEntity(itemCode = "KEEP-ME", itemName = "Historical item", category = "Raw", unit = "kg")
         )
-        database.stockMovementDao().insertMovement(
+        activeDatabase.stockMovementDao().insertMovement(
             StockMovementEntity("BACKUP-IN", "IN", item, warehouse, 14.0, isApproved = true)
         )
 
-        // The backup manager operates on the app's named database.
-        database.close()
-        val activeDatabase = DatabaseProvider.getDatabase(context)
-        activeDatabase.itemDao().insertItem(
-            ItemEntity(itemCode = "TEMPORARY", itemName = "After backup", category = "Raw", unit = "kg")
-        )
         val uri = android.net.Uri.parse("content://com.bravo.warehouse.test.backup/roundtrip.zip")
         DatabaseBackupManager.exportBackup(context, uri)
 
-        // Change the live database after exporting, then restore the archive.
+        // The export closes/reopens the provider database. Add a row afterward
+        // so restore must replace the named live database with the archive.
         DatabaseProvider.getDatabase(context).itemDao().insertItem(
             ItemEntity(itemCode = "REMOVE-ME", itemName = "Not in archive", category = "Raw", unit = "kg")
         )
         DatabaseBackupManager.importBackup(context, uri)
 
-        val restored = DatabaseProvider.getDatabase(context)
-        assertEquals(1, restored.itemDao().getAllItemsIncludingInactive().first()
-            .count { it.itemCode == "KEEP-ME" })
-        assertEquals(0, restored.itemDao().getAllItemsIncludingInactive().first()
-            .count { it.itemCode == "REMOVE-ME" })
-        assertEquals(14.0, restored.stockMovementDao().getTotalIncoming(item, warehouse), 0.000001)
+        database = DatabaseProvider.getDatabase(context)
+        val restoredItems = database.itemDao().getAllItemsIncludingInactive().first()
+        assertEquals(1, restoredItems.count { it.itemCode == "KEEP-ME" })
+        assertEquals(0, restoredItems.count { it.itemCode == "REMOVE-ME" })
+        assertEquals(14.0, database.stockMovementDao().getTotalIncoming(item, warehouse), 0.000001)
+        assertEquals(14.0, balance(item, warehouse), 0.000001)
     }
 
     private suspend fun balance(itemId: Long, warehouseId: Long): Double {
@@ -175,32 +172,57 @@ class InventoryCriticalPathTest {
         return dao.getTotalIncoming(itemId, warehouseId) - dao.getTotalOutgoing(itemId, warehouseId)
     }
 
+    /**
+     * Creates the exact Room v5 schema represented by the v5 entities and
+     * indices: v5 has recipientName/department absent, and transferNumber's
+     * index is non-unique following MIGRATION_4_5. Room's own standard master
+     * table is included so DatabaseProvider can exercise the real 5->6 path.
+     */
     private fun createLegacyVersionFiveDatabase() {
         val file = context.getDatabasePath(AppDatabase.DATABASE_NAME)
         file.parentFile?.mkdirs()
         val sqlite = SQLiteDatabase.openOrCreateDatabase(file, null)
         try {
-            sqlite.execSQL("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, itemCode TEXT NOT NULL, itemName TEXT NOT NULL, category TEXT NOT NULL, unit TEXT NOT NULL, minimumStock REAL NOT NULL, description TEXT NOT NULL, isActive INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
-            sqlite.execSQL("CREATE UNIQUE INDEX index_items_itemCode ON items(itemCode)")
-            sqlite.execSQL("CREATE INDEX index_items_itemName ON items(itemName)")
-            sqlite.execSQL("CREATE TABLE warehouses (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, warehouseCode TEXT NOT NULL, warehouseName TEXT NOT NULL, location TEXT NOT NULL, description TEXT NOT NULL, isActive INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
-            sqlite.execSQL("CREATE UNIQUE INDEX index_warehouses_warehouseCode ON warehouses(warehouseCode)")
-            sqlite.execSQL("CREATE INDEX index_warehouses_warehouseName ON warehouses(warehouseName)")
-            sqlite.execSQL("CREATE TABLE stock_movements (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, documentNumber TEXT NOT NULL, movementType TEXT NOT NULL, itemId INTEGER NOT NULL, warehouseId INTEGER NOT NULL, quantity REAL NOT NULL, notes TEXT NOT NULL, movementDate INTEGER NOT NULL, createdAt INTEGER NOT NULL, createdBy TEXT NOT NULL, isApproved INTEGER NOT NULL)")
-            sqlite.execSQL("CREATE INDEX index_stock_movements_itemId ON stock_movements(itemId)")
-            sqlite.execSQL("CREATE INDEX index_stock_movements_warehouseId ON stock_movements(warehouseId)")
-            sqlite.execSQL("CREATE INDEX index_stock_movements_movementType ON stock_movements(movementType)")
-            sqlite.execSQL("CREATE INDEX index_stock_movements_documentNumber ON stock_movements(documentNumber)")
-            sqlite.execSQL("CREATE TABLE stock_transfers (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, transferNumber TEXT NOT NULL, itemId INTEGER NOT NULL, sourceWarehouseId INTEGER NOT NULL, destinationWarehouseId INTEGER NOT NULL, quantity REAL NOT NULL, notes TEXT NOT NULL, transferDate INTEGER NOT NULL, createdAt INTEGER NOT NULL, isApproved INTEGER NOT NULL)")
-            sqlite.execSQL("CREATE INDEX index_stock_transfers_transferNumber ON stock_transfers(transferNumber)")
-            sqlite.execSQL("CREATE INDEX index_stock_transfers_itemId ON stock_transfers(itemId)")
-            sqlite.execSQL("CREATE INDEX index_stock_transfers_sourceWarehouseId ON stock_transfers(sourceWarehouseId)")
-            sqlite.execSQL("CREATE INDEX index_stock_transfers_destinationWarehouseId ON stock_transfers(destinationWarehouseId)")
-            sqlite.execSQL("CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)")
-            sqlite.execSQL("INSERT INTO room_master_table (id, identity_hash) VALUES (42, 'legacy-v5')")
-            sqlite.execSQL("INSERT INTO items VALUES (41, 'LEGACY-ITEM', 'Legacy', 'Raw', 'kg', 0.0, '', 1, 1, 1)")
-            sqlite.execSQL("INSERT INTO warehouses VALUES (7, 'LEGACY-WH', 'Legacy warehouse', '', '', 1, 1, 1)")
-            sqlite.execSQL("INSERT INTO stock_movements VALUES (9, 'LEGACY-IN', 'IN', 41, 7, 12.5, '', 1, 1, '', 1)")
+            sqlite.execSQL(
+                """CREATE TABLE IF NOT EXISTS `items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `itemCode` TEXT NOT NULL, `itemName` TEXT NOT NULL, `category` TEXT NOT NULL, `unit` TEXT NOT NULL, `minimumStock` REAL NOT NULL, `description` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)"""
+            )
+            sqlite.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_items_itemCode` ON `items` (`itemCode`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_items_itemName` ON `items` (`itemName`)")
+
+            sqlite.execSQL(
+                """CREATE TABLE IF NOT EXISTS `warehouses` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `warehouseCode` TEXT NOT NULL, `warehouseName` TEXT NOT NULL, `location` TEXT NOT NULL, `description` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)"""
+            )
+            sqlite.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_warehouses_warehouseCode` ON `warehouses` (`warehouseCode`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_warehouses_warehouseName` ON `warehouses` (`warehouseName`)")
+
+            sqlite.execSQL(
+                """CREATE TABLE IF NOT EXISTS `stock_movements` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `documentNumber` TEXT NOT NULL, `movementType` TEXT NOT NULL, `itemId` INTEGER NOT NULL, `warehouseId` INTEGER NOT NULL, `quantity` REAL NOT NULL, `notes` TEXT NOT NULL, `movementDate` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `createdBy` TEXT NOT NULL, `isApproved` INTEGER NOT NULL)"""
+            )
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_movements_itemId` ON `stock_movements` (`itemId`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_movements_warehouseId` ON `stock_movements` (`warehouseId`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_movements_movementType` ON `stock_movements` (`movementType`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_movements_documentNumber` ON `stock_movements` (`documentNumber`)")
+
+            sqlite.execSQL(
+                """CREATE TABLE IF NOT EXISTS `stock_transfers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `transferNumber` TEXT NOT NULL, `itemId` INTEGER NOT NULL, `sourceWarehouseId` INTEGER NOT NULL, `destinationWarehouseId` INTEGER NOT NULL, `quantity` REAL NOT NULL, `notes` TEXT NOT NULL, `transferDate` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `isApproved` INTEGER NOT NULL)"""
+            )
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_transfers_transferNumber` ON `stock_transfers` (`transferNumber`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_transfers_itemId` ON `stock_transfers` (`itemId`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_transfers_sourceWarehouseId` ON `stock_transfers` (`sourceWarehouseId`)")
+            sqlite.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_transfers_destinationWarehouseId` ON `stock_transfers` (`destinationWarehouseId`)")
+
+            sqlite.execSQL("CREATE TABLE IF NOT EXISTS `room_master_table` (`id` INTEGER PRIMARY KEY, `identity_hash` TEXT)")
+            sqlite.execSQL("INSERT INTO `room_master_table` (`id`, `identity_hash`) VALUES (42, 'room-v5-schema-fixture')")
+
+            sqlite.execSQL(
+                "INSERT INTO `items` VALUES (41, 'LEGACY-ITEM', 'Legacy', 'Raw', 'kg', 0.0, '', 1, 1, 1)"
+            )
+            sqlite.execSQL(
+                "INSERT INTO `warehouses` VALUES (7, 'LEGACY-WH', 'Legacy warehouse', '', '', 1, 1, 1)"
+            )
+            sqlite.execSQL(
+                "INSERT INTO `stock_movements` VALUES (9, 'LEGACY-IN', 'IN', 41, 7, 12.5, '', 1, 1, '', 1)"
+            )
             sqlite.version = 5
         } finally {
             sqlite.close()
