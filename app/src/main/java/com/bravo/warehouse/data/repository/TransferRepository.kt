@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.bravo.warehouse.data.AppDatabase
 import com.bravo.warehouse.data.entity.StockMovementEntity
 import com.bravo.warehouse.data.entity.TransferEntity
+import kotlinx.coroutines.flow.Flow
 
 data class TransferLine(
     val itemId: Long,
@@ -14,8 +15,18 @@ class TransferRepository(
     private val database: AppDatabase
 ) {
 
-    fun getAllTransfers() =
+    fun getAllTransfers(): Flow<List<TransferEntity>> =
         database.transferDao().getAllTransfers()
+
+    suspend fun getTransfersByNumber(
+        transferNumber: String
+    ): List<TransferEntity> =
+        database.transferDao().getTransfersByNumber(transferNumber.trim())
+
+    fun observeTransfersByNumber(
+        transferNumber: String
+    ): Flow<List<TransferEntity>> =
+        database.transferDao().observeTransfersByNumber(transferNumber.trim())
 
     suspend fun createTransfer(
         transferNumber: String,
@@ -97,7 +108,7 @@ class TransferRepository(
                 "Destination warehouse does not exist or is inactive"
             }
 
-            // التحقق من جميع الأصناف والأرصدة قبل أي ترحيل
+            // التحقق من جميع الأصناف والأرصدة قبل الترحيل
             lines.forEach { line ->
 
                 val item = itemDao.getItemById(line.itemId)
@@ -123,7 +134,6 @@ class TransferRepository(
 
             val now = System.currentTimeMillis()
 
-            // حفظ تفاصيل المستند
             val transferIds = lines.map { line ->
                 transferDao.insertTransfer(
                     TransferEntity(
@@ -140,7 +150,6 @@ class TransferRepository(
                 )
             }
 
-            // تجهيز حركات الصرف
             val outgoingMovements = lines.map { line ->
                 StockMovementEntity(
                     documentNumber = cleanNumber,
@@ -156,7 +165,6 @@ class TransferRepository(
                 )
             }
 
-            // تجهيز حركات التوريد
             val incomingMovements = lines.map { line ->
                 StockMovementEntity(
                     documentNumber = cleanNumber,
@@ -172,7 +180,7 @@ class TransferRepository(
                 )
             }
 
-            // اعتماد الحركات داخل المعاملة نفسها
+            // ترحيل الصرف والتوريد ضمن معاملة قاعدة بيانات واحدة
             movementDao.insertAndApproveMovementsSafely(outgoingMovements)
             movementDao.insertAndApproveMovementsSafely(incomingMovements)
 
