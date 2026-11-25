@@ -91,6 +91,76 @@ object DatabaseProvider {
         }
     }
 
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+
+            db.execSQL(
+                """
+                CREATE TABLE stock_movements_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    documentNumber TEXT NOT NULL,
+                    movementType TEXT NOT NULL,
+                    itemId INTEGER NOT NULL,
+                    warehouseId INTEGER NOT NULL,
+                    quantity REAL NOT NULL,
+                    notes TEXT NOT NULL,
+                    movementDate INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    createdBy TEXT NOT NULL,
+                    isApproved INTEGER NOT NULL,
+                    recipientName TEXT NOT NULL,
+                    department TEXT NOT NULL
+                )
+                """.trimIndent()
+            )
+
+            db.execSQL(
+                """
+                INSERT INTO stock_movements_new (
+                    id,
+                    documentNumber,
+                    movementType,
+                    itemId,
+                    warehouseId,
+                    quantity,
+                    notes,
+                    movementDate,
+                    createdAt,
+                    createdBy,
+                    isApproved,
+                    recipientName,
+                    department
+                )
+                SELECT
+                    id,
+                    documentNumber,
+                    movementType,
+                    itemId,
+                    warehouseId,
+                    quantity,
+                    notes,
+                    movementDate,
+                    createdAt,
+                    createdBy,
+                    isApproved,
+                    '',
+                    ''
+                FROM stock_movements
+                """.trimIndent()
+            )
+
+            db.execSQL("DROP TABLE stock_movements")
+            db.execSQL(
+                "ALTER TABLE stock_movements_new RENAME TO stock_movements"
+            )
+
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_itemId ON stock_movements(itemId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_warehouseId ON stock_movements(warehouseId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_movementType ON stock_movements(movementType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_stock_movements_documentNumber ON stock_movements(documentNumber)")
+        }
+    }
+
     @Volatile
     private var INSTANCE: AppDatabase? = null
 
@@ -105,7 +175,8 @@ object DatabaseProvider {
                     MIGRATION_1_2,
                     MIGRATION_2_3,
                     MIGRATION_3_4,
-                    MIGRATION_4_5
+                    MIGRATION_4_5,
+                    MIGRATION_5_6
                 )
                 .build()
                 .also { INSTANCE = it }
