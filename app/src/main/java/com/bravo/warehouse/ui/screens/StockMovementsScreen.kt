@@ -72,6 +72,9 @@ fun StockMovementsScreen(
     var quantity by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
+    var recipientName by remember { mutableStateOf("") }
+    var department by remember { mutableStateOf("") }
+
     var draftLines by remember {
         mutableStateOf(listOf<MovementDraftLine>())
     }
@@ -600,6 +603,60 @@ fun StockMovementsScreen(
                 }
             }
 
+            // بيانات المستلم والجهة
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "بيانات المستلم",
+                            color = MovementNavy,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        OutlinedTextField(
+                            value = recipientName,
+                            onValueChange = { recipientName = it },
+                            enabled = !isSaving,
+                            label = {
+                                Text(
+                                    if (movementType == "OUT")
+                                        "اسم المستلم (إلزامي)"
+                                    else
+                                        "اسم المستلم"
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = movementFieldColors()
+                        )
+
+                        OutlinedTextField(
+                            value = department,
+                            onValueChange = { department = it },
+                            enabled = !isSaving,
+                            label = {
+                                Text("الجهة / القسم (اختياري)")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = movementFieldColors()
+                        )
+                    }
+                }
+            }
+
             // الملاحظات
             item {
                 OutlinedTextField(
@@ -634,9 +691,18 @@ fun StockMovementsScreen(
                                 messageIsError = true
                             }
 
+                            movementType == "OUT" &&
+                                recipientName.isBlank() -> {
+                                message = "يرجى إدخال اسم المستلم"
+                                messageIsError = true
+                            }
+
                             isSaving -> Unit
 
-                            else -> showApprovalDialog = true
+                            else -> {
+                                message = ""
+                                showApprovalDialog = true
+                            }
                         }
                     },
                     modifier = Modifier
@@ -662,6 +728,8 @@ fun StockMovementsScreen(
                             selectedItemId = null
                             quantity = ""
                             notes = ""
+                            recipientName = ""
+                            department = ""
                             editingIndex = -1
                             editingQuantity = ""
                             message = "تم إلغاء المسودة"
@@ -796,6 +864,20 @@ fun StockMovementsScreen(
                                 fontWeight = FontWeight.Bold
                             )
 
+                            if (movement.recipientName.isNotBlank()) {
+                                Text(
+                                    "المستلم: ${movement.recipientName}",
+                                    color = MovementText
+                                )
+                            }
+
+                            if (movement.department.isNotBlank()) {
+                                Text(
+                                    "الجهة / القسم: ${movement.department}",
+                                    color = MovementMuted
+                                )
+                            }
+
                             Text(
                                 "التاريخ: ${
                                     DateTimeUtils.formatDateTime(
@@ -852,14 +934,24 @@ fun StockMovementsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showApprovalDialog = false
-
                         val warehouseId = selectedWarehouseId
                         val typeToSave = movementType
                         val notesToSave = notes.trim()
+                        val recipientToSave = recipientName.trim()
+                        val departmentToSave = department.trim()
                         val linesToSave = draftLines.toList()
 
-                        if (warehouseId != null) {
+                        if (
+                            warehouseId == null ||
+                            linesToSave.isEmpty() ||
+                            (typeToSave == "OUT" && recipientToSave.isBlank())
+                        ) {
+                            showApprovalDialog = false
+                            message = "تحقق من بيانات المستند واسم المستلم"
+                            messageIsError = true
+                        } else if (!isSaving) {
+                            showApprovalDialog = false
+
                             scope.launch {
                                 isSaving = true
                                 message = ""
@@ -880,7 +972,9 @@ fun StockMovementsScreen(
                                             notes = notesToSave,
                                             movementDate = now,
                                             createdAt = now,
-                                            isApproved = false
+                                            isApproved = false,
+                                            recipientName = recipientToSave,
+                                            department = departmentToSave
                                         )
                                     }
 
@@ -895,18 +989,10 @@ fun StockMovementsScreen(
                                     selectedItemId = null
                                     quantity = ""
                                     notes = ""
+                                    recipientName = ""
+                                    department = ""
                                     editingIndex = -1
                                     editingQuantity = ""
-
-                                    val itemId = selectedItemId
-
-                                    if (itemId != null) {
-                                        currentBalance =
-                                            movementRepository.getCurrentBalance(
-                                                itemId,
-                                                warehouseId
-                                            )
-                                    }
 
                                 } catch (e: Exception) {
                                     val outgoing =
