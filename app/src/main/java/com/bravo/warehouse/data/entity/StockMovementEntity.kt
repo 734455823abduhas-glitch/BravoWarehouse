@@ -19,22 +19,16 @@ data class StockMovementEntity(
     val id: Long = 0,
 
     val documentNumber: String,
-
     val movementType: String,
-
     val itemId: Long,
-
     val warehouseId: Long,
-
     val quantity: Double,
-
     val notes: String = "",
-
     val movementDate: Long = System.currentTimeMillis(),
-
     val createdAt: Long = System.currentTimeMillis(),
-
     val createdBy: String = "",
+    val isApproved: Boolean = false,
 
-    val isApproved: Boolean = false
+    val recipientName: String = "",
+    val department: String = ""
 )
